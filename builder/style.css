@@ -1,0 +1,167 @@
+/* builder/style.css */
+/* סגנונות ספציפיים שלא נמצאים בטיילווינד */
+
+/* עבור גרירת רכיבים */
+.widget-dragging {
+    opacity: 0.5;
+    cursor: move;
+}
+
+.column-highlight {
+    background-color: rgba(14, 165, 233, 0.1) !important;
+    border: 2px dashed rgba(14, 165, 233, 0.5) !important;
+}
+
+.widget-controls {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: none;
+    background-color: rgba(14, 165, 233, 0.8);
+    color: white;
+    z-index: 10;
+}
+
+.widget-wrapper:hover .widget-controls {
+    display: flex;
+}
+
+.row-wrapper {
+    position: relative;
+    margin-bottom: 1rem;
+    padding: 1rem 0;
+}
+
+.row-controls {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    background-color: rgba(14, 165, 233, 0.8);
+    color: white;
+    border-radius: 0 0 0.25rem 0.25rem;
+    z-index: 10;
+}
+
+.row-wrapper:hover .row-controls {
+    display: flex;
+}
+
+/* כפתורי "הוסף רכיב" בעמודות ריקות */
+.column-add-placeholder {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 4rem;
+    border: 2px dashed #e5e7eb;
+    border-radius: 0.25rem;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.column-add-placeholder:hover {
+    background-color: #f3f4f6;
+    border-color: #d1d5db;
+    color: #6b7280;
+}
+
+/* הנפשות */
+.fade-in {
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* הגדרות טופס */
+.settings-group {
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.settings-group:last-child {
+    border-bottom: none;
+}
+
+.settings-title {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: #374151;
+}
+
+/* פנל הגדרות ספציפיות */
+.settings-input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.settings-select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+    background-color: white;
+}
+
+/* כפתורי גרירה */
+.drag-handle {
+    cursor: move;
+    color: #9ca3af;
+    margin-left: 0.5rem;
+}
+
+/* התאמות לסדרי עדיפות בעיבוד */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: rgba(14, 165, 233, 0.1);
+}
+
+.sortable-chosen {
+    background-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* הנפשות לפנלים */
+.panel-slide-in {
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+}
+
+/* סגנונות לכפתורי פעולה שורה */
+.row-add-button {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+}
+
+.row-add-top {
+    top: -0.75rem;
+}
+
+.row-add-bottom {
+    bottom: -0.75rem;
+}
+
+/* מצב עריכה פעיל */
+.editing-active {
+    outline: 2px solid #0ea5e9;
+    outline-offset: 2px;
+    position: relative;
+}

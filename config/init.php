@@ -117,3 +117,19 @@ function json_response($data, $status = 200) {
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+// חיבור למסד הנתונים
+try {
+    $pdo = new PDO(
+        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        DB_USER,
+        DB_PASS,
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci"
+        ]
+    );
+} catch (PDOException $e) {
+    die("שגיאת התחברות למסד הנתונים: " . $e->getMessage());
+}

@@ -97,43 +97,37 @@ function get_landing_page($page_id, $user_id = null) {
 /**
  * יצירת דף נחיתה חדש
  * 
- * @param int $user_id מזהה המשתמש
  * @param array $page_data נתוני הדף
- * @return int|false מזהה הדף החדש או false במקרה של שגיאה
+ * @param int $user_id מזהה המשתמש
+ * @return array תוצאת הפעולה [success, message, landing_page_id]
  */
-function create_landing_page($user_id, $page_data) {
+function create_landing_page($page_data, $user_id) {
     global $pdo;
     
-    // בדיקה שלמשתמש יש מנוי פעיל
-    if (!has_active_subscription($user_id)) {
-        return ['error' => 'נדרש מנוי פעיל ליצירת דף נחיתה'];
-    }
-    
-    // בדיקה שהמשתמש לא חרג ממגבלת דפי הנחיתה במנוי שלו
-    $subscription = get_active_subscription($user_id);
-    $plan_stmt = $pdo->prepare("SELECT landing_pages_limit FROM plans WHERE id = ?");
-    $plan_stmt->execute([$subscription['plan_id']]);
-    $plan = $plan_stmt->fetch();
-    
-    $count_stmt = $pdo->prepare("
-        SELECT COUNT(*) FROM landing_pages 
-        WHERE user_id = ? AND status != 'archived'
-    ");
-    $count_stmt->execute([$user_id]);
-    $current_pages_count = $count_stmt->fetchColumn();
-    
-    if ($current_pages_count >= $plan['landing_pages_limit']) {
-        return ['error' => 'הגעת למגבלת דפי הנחיתה במנוי שלך. שדרג את המנוי כדי ליצור דפים נוספים.'];
-    }
-    
     try {
+        // בדיקה שלמשתמש יש מנוי פעיל
+        if (!has_active_subscription($user_id)) {
+            return [
+                'success' => false,
+                'message' => 'נדרש מנוי פעיל ליצירת דף נחיתה'
+            ];
+        }
+        
+        // בדיקה שהמשתמש לא חרג ממגבלת דפי הנחיתה במנוי שלו
+        if (has_reached_limit('landing_pages')) {
+            return [
+                'success' => false,
+                'message' => 'הגעת למגבלת דפי הנחיתה במנוי שלך. שדרג את המנוי כדי ליצור דפים נוספים.'
+            ];
+        }
+        
         $pdo->beginTransaction();
         
         // יצירת רשומת דף נחיתה
         $stmt = $pdo->prepare("
             INSERT INTO landing_pages 
-            (user_id, title, slug, description, template_id, seo_title, seo_description, seo_keywords, status) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft')
+            (user_id, title, slug, description, seo_title, seo_description, seo_keywords, status, created_at, updated_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
         ");
         
         $stmt->execute([
@@ -141,10 +135,10 @@ function create_landing_page($user_id, $page_data) {
             $page_data['title'],
             $page_data['slug'],
             $page_data['description'] ?? '',
-            $page_data['template_id'] ?? null,
             $page_data['seo_title'] ?? $page_data['title'],
             $page_data['seo_description'] ?? '',
             $page_data['seo_keywords'] ?? '',
+            'draft'
         ]);
         
         $page_id = $pdo->lastInsertId();
@@ -152,23 +146,29 @@ function create_landing_page($user_id, $page_data) {
         // יצירת תוכן ראשוני לדף
         $content_stmt = $pdo->prepare("
             INSERT INTO landing_page_contents 
-            (landing_page_id, content, css, js, version, is_current) 
-            VALUES (?, ?, ?, ?, 1, 1)
+            (landing_page_id, content, version, is_current, created_at) 
+            VALUES (?, ?, 1, 1, NOW())
         ");
         
-        $content = $page_data['content'] ?? '<div class="container"><h1>דף נחיתה חדש</h1></div>';
-        $css = $page_data['css'] ?? '';
-        $js = $page_data['js'] ?? '';
+        $content = $page_data['content'] ?? '<div class="container mx-auto px-4 py-8"><h1 class="text-3xl font-bold">דף נחיתה חדש</h1></div>';
         
-        $content_stmt->execute([$page_id, $content, $css, $js]);
+        $content_stmt->execute([$page_id, $content]);
         
         $pdo->commit();
-        return $page_id;
+        
+        return [
+            'success' => true,
+            'message' => 'דף הנחיתה נוצר בהצלחה!',
+            'landing_page_id' => $page_id
+        ];
         
     } catch (PDOException $e) {
         $pdo->rollBack();
         error_log("שגיאה ביצירת דף נחיתה: " . $e->getMessage());
-        return ['error' => 'שגיאה ביצירת דף נחיתה. אנא נסה שוב.'];
+        return [
+            'success' => false,
+            'message' => 'שגיאה ביצירת דף נחיתה. אנא נסה שוב.'
+        ];
     }
 }
 
@@ -300,5 +300,32 @@ function update_landing_page($page_id, $user_id, $page_data) {
         $pdo->rollBack();
         error_log("שגיאה בעדכון דף נחיתה: " . $e->getMessage());
         return ['error' => 'שגיאה בעדכון דף נחיתה. אנא נסה שוב.'];
+    }
+}
+
+/**
+ * קבלת תבניות דפי נחיתה זמינות
+ * 
+ * @param string $plan_level רמת המנוי של המשתמש
+ * @return array רשימת תבניות
+ */
+function get_landing_page_templates($plan_level = 'all') {
+    global $pdo;
+    
+    try {
+        $sql = "
+            SELECT * FROM templates 
+            WHERE type = 'landing_page'
+            AND (plan_level = 'all' OR plan_level = ?)
+            ORDER BY is_premium ASC, name ASC
+        ";
+        
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$plan_level]);
+        return $stmt->fetchAll();
+        
+    } catch (PDOException $e) {
+        error_log("שגיאה בקבלת תבניות דפי נחיתה: " . $e->getMessage());
+        return [];
     }
 }

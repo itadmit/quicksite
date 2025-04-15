@@ -26,8 +26,52 @@ $is_builder = strpos($_SERVER['PHP_SELF'], '/builder/') !== false;
     <!-- Remix Icons -->
     <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
     
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
     <!-- jQuery -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    
+    <!-- Alpine.js -->
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+    <?php if ($is_builder): ?>
+    <!-- Builder-specific styles -->
+    <style>
+        .builder-container {
+            height: calc(100vh - 64px);
+        }
+        
+        .element-item {
+            cursor: move;
+            user-select: none;
+        }
+        
+        #preview-container {
+            min-height: 600px;
+            width: 100%;
+            max-width: 1200px;
+            position: relative;
+        }
+        
+        .preview-element {
+            position: absolute;
+            min-width: 50px;
+            min-height: 30px;
+            cursor: move;
+            user-select: none;
+        }
+        
+        .preview-element:hover {
+            outline: 2px solid #4F46E5;
+        }
+        
+        .preview-element.selected {
+            outline: 2px solid #4F46E5;
+            z-index: 100;
+        }
+    </style>
+    <?php endif; ?>
     
     <!-- Custom CSS -->
     <style>
@@ -127,6 +171,7 @@ $is_builder = strpos($_SERVER['PHP_SELF'], '/builder/') !== false;
                 display: block;
             }
         }
+        
     </style>
     
     <?php if (isset($extra_css)): ?>
@@ -135,7 +180,7 @@ $is_builder = strpos($_SERVER['PHP_SELF'], '/builder/') !== false;
         <?php echo $extra_css; ?>
     </style>
     <?php endif; ?>
-    
+
 </head>
 <body class="bg-gray-50">
 <div class="page-wrapper">
