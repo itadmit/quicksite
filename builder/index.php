@@ -2,15 +2,15 @@
 require_once '../config/init.php';
 
 // טעינת הקומפוננטות
-require_once 'components/text.php';
-require_once 'components/button.php';
-require_once 'components/form.php';
-require_once 'components/row.php';
-require_once 'components/image.php';
-require_once 'components/video.php';
-require_once 'components/testimonial.php';
-require_once 'components/countdown.php';
-
+// טעינת הקומפוננטות
+require_once 'widgets/text.php';
+require_once 'widgets/button.php';
+require_once 'widgets/form.php';
+require_once 'widgets/row.php';
+require_once 'widgets/image.php';
+require_once 'widgets/video.php';
+require_once 'widgets/testimonial.php';
+require_once 'widgets/countdown.php';
 // וידוא שמשתמש מחובר
 if (!isLoggedIn()) {
     header('Location: ../auth/login.php');
