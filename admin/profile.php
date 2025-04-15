@@ -18,6 +18,17 @@ $error = '';
 $success = '';
 $profile_data = $current_user;
 
+// בדיקה להודעות ממחיקת חשבון
+if (isset($_SESSION['account_error'])) {
+    $error = $_SESSION['account_error'];
+    unset($_SESSION['account_error']);
+}
+
+if (isset($_SESSION['account_success'])) {
+    $success = $_SESSION['account_success'];
+    unset($_SESSION['account_success']);
+}
+
 // טיפול בעדכון פרטים
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_profile'])) {
     // בדיקת CSRF
@@ -301,6 +312,112 @@ include_once '../includes/header.php';
         </div>
     </div>
 </div>
+
+<!-- מחיקת חשבון -->
+<div class="bg-white shadow overflow-hidden sm:rounded-lg mb-6">
+    <div class="px-4 py-5 sm:px-6">
+        <h3 class="text-lg leading-6 font-medium text-gray-900">מחיקת חשבון</h3>
+        <p class="mt-1 max-w-2xl text-sm text-gray-500">פעולה זו תמחק באופן קבוע את החשבון שלך וכל המידע המשויך אליו</p>
+    </div>
+    <div class="px-4 py-5 sm:p-6 bg-gray-50">
+        <div class="border-2 border-red-200 rounded-lg p-4 bg-red-50">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="ri-error-warning-fill text-red-600 text-xl"></i>
+                </div>
+                <div class="mr-3">
+                    <h3 class="text-sm font-medium text-red-800">אזהרה: פעולה זו לא ניתנת לביטול</h3>
+                    <div class="mt-2 text-sm text-red-700">
+                        <p>מחיקת החשבון תסיר לצמיתות:</p>
+                        <ul class="mt-1 list-disc mr-5 space-y-1">
+                            <li>את כל הנתונים האישיים שלך</li>
+                            <li>את כל דפי הנחיתה שיצרת</li>
+                            <li>את כל הקמפיינים והודעות שנשלחו</li>
+                            <li>את כל אנשי הקשר ורשימות התפוצה</li>
+                            <li>את כל ההגדרות והמנויים</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4">
+                <button type="button" id="delete-account-btn" class="inline-flex items-center justify-center px-4 py-2 border border-transparent font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 text-sm">
+                    <i class="ri-delete-bin-line ml-2"></i>
+                    מחק את החשבון שלי
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- חלונית אישור מחיקת חשבון -->
+<div id="delete-account-modal" class="fixed inset-0 overflow-y-auto hidden" style="z-index: 50;">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center">
+        <div class="fixed inset-0 transition-opacity" aria-hidden="true">
+            <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+        </div>
+        <div class="inline-block align-bottom bg-white rounded-lg text-right overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <i class="ri-error-warning-fill text-red-600 text-xl"></i>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:mr-4 sm:text-right">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">אישור מחיקת חשבון</h3>
+                        <div class="mt-2">
+                            <p class="text-sm text-gray-500">האם אתה בטוח שברצונך למחוק את החשבון שלך? פעולה זו לא ניתנת לביטול ותמחק את כל הנתונים שלך.</p>
+                        </div>
+                        <div class="mt-4">
+                            <div class="flex flex-col">
+                                <label for="confirm_delete_email" class="block text-sm font-medium text-gray-700 text-right mb-1">הזן את כתובת הדוא"ל שלך לאישור</label>
+                                <input type="email" id="confirm_delete_email" class="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm" placeholder="email@example.com">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <form action="<?php echo SITE_URL; ?>/admin/account/delete.php" method="POST" id="delete-account-form">
+                    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION[CSRF_TOKEN_NAME]; ?>">
+                    <button type="submit" id="confirm-delete-btn" disabled class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm opacity-50 cursor-not-allowed">
+                        מחק את החשבון
+                    </button>
+                </form>
+                <button type="button" id="cancel-delete-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    ביטול
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// מחיקת חשבון - פתיחת חלונית
+document.getElementById('delete-account-btn').addEventListener('click', function() {
+    document.getElementById('delete-account-modal').classList.remove('hidden');
+});
+
+// מחיקת חשבון - סגירת חלונית
+document.getElementById('cancel-delete-btn').addEventListener('click', function() {
+    document.getElementById('delete-account-modal').classList.add('hidden');
+    document.getElementById('confirm_delete_email').value = '';
+    document.getElementById('confirm-delete-btn').disabled = true;
+    document.getElementById('confirm-delete-btn').classList.add('opacity-50', 'cursor-not-allowed');
+});
+
+// בדיקת כתובת אימייל לאישור מחיקה
+document.getElementById('confirm_delete_email').addEventListener('input', function() {
+    const userEmail = '<?php echo htmlspecialchars($profile_data['email']); ?>';
+    const confirmBtn = document.getElementById('confirm-delete-btn');
+    
+    if (this.value === userEmail) {
+        confirmBtn.disabled = false;
+        confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    } else {
+        confirmBtn.disabled = true;
+        confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+});
+</script>
 
 <?php
 // טעינת תבנית העיצוב - פוטר

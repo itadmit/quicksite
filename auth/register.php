@@ -26,6 +26,7 @@ $user_data = [
 
 $error = '';
 $success = '';
+$account_deleted = isset($_GET['account_deleted']) && $_GET['account_deleted'] === 'true';
 
 // טיפול בשליחת טופס
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
@@ -104,52 +105,89 @@ include_once '../includes/header.php';
 ?>
 
 <div class="sm:mx-auto sm:w-full sm:max-w-md">
+    <h2 class="text-center text-2xl font-bold text-gray-900 mb-6">הרשמה למערכת</h2>
     <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-        <?php if ($success): ?>
-            <div class="bg-green-50 border-r-4 border-green-500 p-4 mb-4">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <i class="ri-checkbox-circle-line text-green-500"></i>
+        <?php if ($account_deleted): ?>
+            <div class="bg-green-50 border-r-4 border-green-500 p-5 mb-6 rounded-lg">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0 mt-0.5">
+                        <i class="ri-checkbox-circle-fill text-green-500 text-xl"></i>
                     </div>
                     <div class="mr-3">
-                        <p class="text-sm text-green-700"><?php echo $success; ?></p>
+                        <p class="text-green-700 text-base font-medium">חשבונך נמחק בהצלחה</p>
+                        <p class="text-green-700 text-sm mt-1">תודה שהשתמשת בשירותינו. אתה מוזמן להירשם מחדש בכל עת.</p>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+        
+        <?php if ($success): ?>
+            <div class="bg-green-50 border-r-4 border-green-500 p-5 mb-6 rounded-lg">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0 mt-0.5">
+                        <i class="ri-checkbox-circle-fill text-green-500 text-xl"></i>
+                    </div>
+                    <div class="mr-3">
+                        <p class="text-green-700 text-base font-medium"><?php echo $success; ?></p>
                     </div>
                 </div>
             </div>
             
-            <div class="text-center mt-6">
-                <p class="mb-4 flex items-center justify-center">
-                    <i class="ri-mail-send-line ml-2 text-indigo-500"></i>
-                    תודה שנרשמת! שלחנו לך אימייל עם קישור לאימות החשבון.
-                </p>
-                <p>לא קיבלת את האימייל? בדוק בתיקיית הספאם או <a href="<?php echo SITE_URL; ?>/auth/resend-verification.php" class="text-indigo-600 hover:text-indigo-500 inline-flex items-center">
-                    שלח שוב
-                    <i class="ri-refresh-line mr-1"></i>
-                </a>.</p>
-                <p class="mt-6">
-                    <a href="<?php echo SITE_URL; ?>/auth/login.php" class="font-medium text-indigo-600 hover:text-indigo-500 inline-flex items-center">
-                        <i class="ri-arrow-right-line ml-1"></i>
-                        חזרה לדף ההתחברות
+            <div class="text-center py-6 px-4 bg-indigo-50 rounded-lg border border-indigo-100 mb-6">
+                <div class="flex flex-col items-center justify-center space-y-6">
+                    <div class="mb-2">
+                        <i class="ri-user-check-line text-indigo-500 text-3xl mb-2"></i>
+                        <h3 class="text-xl font-semibold text-gray-800">תודה שנרשמת!</h3>
+                        <p class="text-gray-600 mt-1">החשבון שלך הופעל באופן אוטומטי</p>
+                    </div>
+                    
+                    <div class="bg-white p-4 rounded-lg shadow-sm border border-indigo-100 w-full max-w-md">
+                        <div class="flex items-center justify-center text-indigo-600 mb-2">
+                            <i class="ri-vip-crown-fill text-2xl ml-2"></i>
+                            <h4 class="text-lg font-semibold">מנוי ניסיון ל-7 ימים</h4>
+                        </div>
+                        <p class="text-gray-700 text-center text-sm">
+                            הפעלנו עבורך מנוי ניסיון כדי שתוכל להתחיל להשתמש במערכת מיד.
+                        </p>
+                    </div>
+                    
+                    <a href="<?php echo SITE_URL; ?>/auth/login.php" class="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all">
+                        <i class="ri-login-box-line ml-2"></i>
+                        עבור לדף ההתחברות
                     </a>
-                </p>
+                </div>
             </div>
         <?php else: ?>
+            <?php if (!empty($error)): ?>
+                <div class="bg-red-50 border-r-4 border-red-500 p-4 mb-6 rounded-lg">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 mt-0.5">
+                            <i class="ri-error-warning-fill text-red-500 text-xl"></i>
+                        </div>
+                        <div class="mr-3">
+                            <p class="text-red-700 text-base"><?php echo $error; ?></p>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <form class="space-y-6" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>" method="POST" id="register-form">
                 <!-- CSRF token -->
                 <input type="hidden" name="csrf_token" value="<?php echo $_SESSION[CSRF_TOKEN_NAME]; ?>">
                 
-                <?php if (!empty($error)): ?>
-                    <div class="bg-red-50 border-r-4 border-red-500 p-4 mb-4">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <i class="ri-error-warning-line text-red-500"></i>
-                            </div>
-                            <div class="mr-3">
-                                <p class="text-sm text-red-700"><?php echo $error; ?></p>
-                            </div>
+                <div class="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-100">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="ri-information-line text-blue-500 text-xl"></i>
+                        </div>
+                        <div class="mr-3">
+                            <h3 class="text-sm font-medium text-blue-800">הרשמה מהירה ופשוטה</h3>
+                            <p class="text-sm text-blue-700 mt-1">
+                                מלא את הפרטים וקבל גישה מיידית עם 7 ימי ניסיון!
+                            </p>
                         </div>
                     </div>
-                <?php endif; ?>
+                </div>
                 
                 <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-2">
                     <div>
@@ -185,7 +223,8 @@ include_once '../includes/header.php';
                         </div>
                         <input id="email" name="email" type="email" autocomplete="email" required 
                               value="<?php echo htmlspecialchars($user_data['email']); ?>"
-                              class="appearance-none block w-full pr-10 px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                              class="appearance-none block w-full pr-10 px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              placeholder="your@email.com">
                     </div>
                 </div>
 
@@ -209,7 +248,8 @@ include_once '../includes/header.php';
                         </div>
                         <input id="phone" name="phone" type="tel" autocomplete="tel" 
                               value="<?php echo htmlspecialchars($user_data['phone']); ?>"
-                              class="appearance-none block w-full pr-10 px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                              class="appearance-none block w-full pr-10 px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              placeholder="050-0000000">
                     </div>
                 </div>
 
@@ -239,7 +279,7 @@ include_once '../includes/header.php';
                     </div>
                 </div>
 
-                <div class="flex items-center">
+                <div class="flex items-center bg-gray-50 p-3 rounded-md">
                     <input id="terms" name="terms" type="checkbox" required
                           class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
                     <label for="terms" class="mr-2 block text-sm text-gray-900">
@@ -248,9 +288,9 @@ include_once '../includes/header.php';
                 </div>
 
                 <div>
-                    <button type="submit" class="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    <button type="submit" class="w-full flex justify-center items-center py-3 px-4 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all">
                         <i class="ri-user-add-line ml-2"></i>
-                        הרשמה
+                        הרשם עכשיו
                     </button>
                 </div>
             </form>

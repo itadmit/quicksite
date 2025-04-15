@@ -274,17 +274,20 @@ function register($user_data) {
             $user_data['company_name'] ?? '',
             $user_data['phone'] ?? '',
             $verification_code,
-            0, // לא מאומת
+            1, // שינוי כאן: מסומן כמאומת מיד
             'active'
         ]);
         
         $user_id = $pdo->lastInsertId();
         
-        // שליחת אימייל אימות
-        send_verification_email($user_data['email'], $verification_code);
+        // יצירת מנוי ניסיון ל-7 ימים
+        create_trial_subscription($user_id, 7);
+        
+        // בגלל שאנחנו בסביבת לוקלהוסט, רק לוג את הקוד במקום לשלוח מייל
+        error_log("קוד אימות למשתמש {$user_data['email']}: {$verification_code}");
         
         $result['success'] = true;
-        $result['message'] = 'ההרשמה בוצעה בהצלחה. נשלח אליך אימייל לאימות החשבון';
+        $result['message'] = 'ההרשמה בוצעה בהצלחה. החשבון מאומת ומנוי ניסיון ל-7 ימים הופעל אוטומטית';
         $result['user_id'] = $user_id;
         
         return $result;
@@ -711,21 +714,69 @@ function has_active_subscription($user_id) {
 function get_active_subscription($user_id) {
     global $pdo;
     
+    if (!$user_id) {
+        return false;
+    }
+    
     try {
-        $stmt = $pdo->prepare("
-            SELECT s.*, p.name as plan_name, p.price, p.landing_pages_limit, p.contacts_limit, 
-                   p.messages_limit, p.views_limit, p.custom_domain, p.api_access
-            FROM subscriptions s
-            JOIN plans p ON s.plan_id = p.id
-            WHERE s.user_id = ? AND s.status = 'active' AND s.end_date >= CURDATE()
-            ORDER BY s.end_date DESC
-            LIMIT 1
-        ");
-        $stmt->execute([$user_id]);
+        // בדיקה אם טבלת subscriptions קיימת
+        $table_check = $pdo->query("SHOW TABLES LIKE 'subscriptions'");
+        if (!$table_check || $table_check->rowCount() === 0) {
+            return false;
+        }
         
-        return $stmt->fetch();
+        // בדיקת המבנה של טבלת subscriptions
+        $columns_check = $pdo->query("SHOW COLUMNS FROM subscriptions");
+        $columns = [];
+        while ($column = $columns_check->fetch(PDO::FETCH_ASSOC)) {
+            $columns[] = $column['Field'];
+        }
+        
+        $has_new_structure = in_array('payment_status', $columns) && in_array('renewal_date', $columns);
+        
+        // השאילתה תשתנה בהתאם למבנה הטבלה
+        if ($has_new_structure) {
+            $stmt = $pdo->prepare("
+                SELECT s.*, p.name as plan_name, p.price, p.landing_pages_limit, 
+                       p.contacts_limit, p.messages_limit, p.views_limit
+                FROM subscriptions s
+                JOIN plans p ON s.plan_id = p.id
+                WHERE s.user_id = ? AND s.status = 'active' AND s.end_date >= CURDATE()
+                ORDER BY s.end_date DESC
+                LIMIT 1
+            ");
+        } else {
+            $stmt = $pdo->prepare("
+                SELECT s.*, p.name as plan_name, p.price, p.landing_pages_limit, 
+                       p.contacts_limit, p.messages_limit, p.views_limit, 
+                       s.payment_method, s.auto_renew
+                FROM subscriptions s
+                JOIN plans p ON s.plan_id = p.id
+                WHERE s.user_id = ? AND s.status = 'active' AND s.end_date >= CURDATE()
+                ORDER BY s.end_date DESC
+                LIMIT 1
+            ");
+        }
+        
+        $stmt->execute([$user_id]);
+        $subscription = $stmt->fetch();
+        
+        if ($subscription) {
+            // המרת ערכים משדות שונים למבנה אחיד עבור הקוד הקיים
+            if ($has_new_structure) {
+                // המרת payment_status לpayment_method (לתאימות עם הקוד הקיים)
+                $subscription['payment_method'] = $subscription['payment_status'];
+                // סימולציה של auto_renew על בסיס renewal_date
+                $subscription['auto_renew'] = !empty($subscription['renewal_date']) && 
+                                              strtotime($subscription['renewal_date']) > strtotime($subscription['end_date']);
+            }
+            
+            return $subscription;
+        }
+        
+        return false;
     } catch (PDOException $e) {
-        error_log("שגיאה בקבלת פרטי מנוי: " . $e->getMessage());
+        error_log("שגיאה בקבלת מנוי פעיל: " . $e->getMessage());
         return false;
     }
 }
@@ -813,3 +864,284 @@ function add_reset_token_column() {
 // וידוא שהטבלאות הנדרשות לאימות קיימות
 create_remember_tokens_table();
 add_reset_token_column();
+
+/**
+ * יצירת מנוי ניסיון למשתמש חדש
+ * 
+ * @param int $user_id מזהה המשתמש
+ * @param int $trial_days מספר ימי הניסיון (ברירת מחדל: 7)
+ * @return bool האם הפעולה הצליחה
+ */
+function create_trial_subscription($user_id, $trial_days = 7) {
+    global $pdo;
+    
+    if (!$user_id) {
+        error_log("שגיאה ביצירת מנוי ניסיון: מזהה משתמש חסר");
+        return false;
+    }
+    
+    try {
+        // בדיקה שטבלת plans קיימת
+        try {
+            // תיקון: ב-SHOW TABLES אין אפשרות להשתמש בפרמטרים, לכן נוסיף את הערך ישירות למחרוזת
+            $table_check = $pdo->query("SHOW TABLES LIKE 'plans'");
+            if (!$table_check || $table_check->rowCount() === 0) {
+                // טבלת plans לא קיימת - ניצור אותה
+                create_plans_table();
+            }
+            
+            // בדיקה שטבלת subscriptions קיימת
+            $table_check = $pdo->query("SHOW TABLES LIKE 'subscriptions'");
+            if (!$table_check || $table_check->rowCount() === 0) {
+                // טבלת subscriptions לא קיימת - ניצור אותה
+                create_subscriptions_table();
+            }
+        } catch (PDOException $e) {
+            error_log("שגיאה בבדיקת טבלאות מנויים: " . $e->getMessage());
+            // ממשיך בכל זאת
+        }
+        
+        // בדיקה אם כבר יש מנוי פעיל למשתמש זה
+        $subscription_check = $pdo->prepare("
+            SELECT COUNT(*) FROM subscriptions 
+            WHERE user_id = ? AND status = 'active' AND end_date >= CURDATE()
+        ");
+        $subscription_check->execute([$user_id]);
+        
+        if ($subscription_check->fetchColumn() > 0) {
+            // כבר יש מנוי פעיל, לא צריך ליצור חדש
+            return true;
+        }
+        
+        // מציאת תוכנית בסיסית/חינמית
+        $stmt = $pdo->prepare("SELECT id FROM plans WHERE status = 'active' ORDER BY price ASC LIMIT 1");
+        $stmt->execute();
+        $plan = $stmt->fetch();
+        
+        if (!$plan) {
+            // אם אין תוכניות, ניצור תוכנית ברירת מחדל
+            try {
+                create_default_plan();
+                // נסה שוב למצוא תוכנית
+                $stmt = $pdo->prepare("SELECT id FROM plans WHERE status = 'active' ORDER BY price ASC LIMIT 1");
+                $stmt->execute();
+                $plan = $stmt->fetch();
+                
+                if (!$plan) {
+                    error_log("שגיאה ביצירת מנוי ניסיון: לא נמצאה תוכנית מתאימה וגם לא ניתן ליצור ברירת מחדל");
+                    return false;
+                }
+            } catch (PDOException $e) {
+                error_log("שגיאה ביצירת תוכנית ברירת מחדל: " . $e->getMessage());
+                return false;
+            }
+        }
+        
+        $plan_id = $plan['id'];
+        $start_date = date('Y-m-d');
+        $end_date = date('Y-m-d', strtotime("+{$trial_days} days"));
+        
+        // בדיקת המבנה של טבלת subscriptions
+        $columns_check = $pdo->query("SHOW COLUMNS FROM subscriptions");
+        $columns = [];
+        while ($column = $columns_check->fetch(PDO::FETCH_ASSOC)) {
+            $columns[] = $column['Field'];
+        }
+        
+        // בדיקת הטיפוס של עמודת payment_status
+        $payment_status_type = "";
+        if (in_array('payment_status', $columns)) {
+            $stmt = $pdo->query("SHOW COLUMNS FROM subscriptions WHERE Field = 'payment_status'");
+            $column_info = $stmt->fetch(PDO::FETCH_ASSOC);
+            $payment_status_type = $column_info['Type'];
+        }
+        
+        // יצירת מנוי ניסיון בהתאם למבנה הטבלה הקיים
+        if (in_array('payment_status', $columns) && in_array('renewal_date', $columns)) {
+            // מבנה הטבלה החדש - בדיקה אם payment_status הוא enum ושימוש בערך תקף
+            if (stripos($payment_status_type, "enum") !== false && stripos($payment_status_type, "'trial'") === false) {
+                // בדיקה אילו ערכים מותרים ובחירת ערך ברירת מחדל
+                preg_match_all("/'([^']+)'/", $payment_status_type, $matches);
+                $allowed_values = $matches[1];
+                $default_status = !empty($allowed_values) ? $allowed_values[0] : 'active';
+                
+                $stmt = $pdo->prepare("
+                    INSERT INTO subscriptions (
+                        user_id, plan_id, status, payment_status, start_date, end_date,
+                        renewal_date, created_at, updated_at
+                    ) VALUES (
+                        ?, ?, 'active', ?, ?, ?, ?, NOW(), NOW()
+                    )
+                ");
+                
+                $stmt->execute([
+                    $user_id,
+                    $plan_id,
+                    $default_status,
+                    $start_date,
+                    $end_date,
+                    $end_date // renewal_date זהה לתאריך סיום במקרה של ניסיון
+                ]);
+            } else {
+                // אם payment_status אינו enum או שהוא מכיל 'trial'
+                $stmt = $pdo->prepare("
+                    INSERT INTO subscriptions (
+                        user_id, plan_id, status, payment_status, start_date, end_date,
+                        renewal_date, created_at, updated_at
+                    ) VALUES (
+                        ?, ?, 'active', 'trial', ?, ?, ?, NOW(), NOW()
+                    )
+                ");
+                
+                $stmt->execute([
+                    $user_id,
+                    $plan_id,
+                    $start_date,
+                    $end_date,
+                    $end_date // renewal_date זהה לתאריך סיום במקרה של ניסיון
+                ]);
+            }
+        } else {
+            // מבנה הטבלה המקורי
+            $stmt = $pdo->prepare("
+                INSERT INTO subscriptions (
+                    user_id, plan_id, status, start_date, end_date,
+                    auto_renew, payment_method, created_at
+                ) VALUES (
+                    ?, ?, 'active', ?, ?, 0, 'trial', NOW()
+                )
+            ");
+            
+            $stmt->execute([
+                $user_id,
+                $plan_id,
+                $start_date,
+                $end_date
+            ]);
+        }
+        
+        return true;
+        
+    } catch (PDOException $e) {
+        error_log("שגיאה ביצירת מנוי ניסיון: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * יצירת טבלת plans אם לא קיימת
+ */
+function create_plans_table() {
+    global $pdo;
+    
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `plans` (
+              `id` INT PRIMARY KEY AUTO_INCREMENT,
+              `name` VARCHAR(255) NOT NULL,
+              `description` TEXT,
+              `price` DECIMAL(10,2) NOT NULL DEFAULT 0,
+              `landing_pages_limit` INT NOT NULL DEFAULT 5,
+              `contacts_limit` INT NOT NULL DEFAULT 500,
+              `messages_limit` INT NOT NULL DEFAULT 1000,
+              `views_limit` INT NOT NULL DEFAULT 5000,
+              `custom_domain` TINYINT(1) NOT NULL DEFAULT 0,
+              `api_access` TINYINT(1) NOT NULL DEFAULT 0,
+              `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        return true;
+    } catch (PDOException $e) {
+        error_log("שגיאה ביצירת טבלת plans: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * יצירת טבלת subscriptions אם לא קיימת
+ */
+function create_subscriptions_table() {
+    global $pdo;
+    
+    try {
+        $pdo->exec("
+            CREATE TABLE IF NOT EXISTS `subscriptions` (
+              `id` INT PRIMARY KEY AUTO_INCREMENT,
+              `user_id` INT NOT NULL,
+              `plan_id` INT NOT NULL,
+              `status` ENUM('active', 'inactive', 'expired', 'cancelled') NOT NULL DEFAULT 'active',
+              `start_date` DATE NOT NULL,
+              `end_date` DATE NOT NULL,
+              `payment_status` VARCHAR(50) DEFAULT 'trial',
+              `renewal_date` DATE NULL,
+              `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        ");
+        return true;
+    } catch (PDOException $e) {
+        error_log("שגיאה ביצירת טבלת subscriptions: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * יצירת תוכנית מנוי ברירת מחדל
+ */
+function create_default_plan() {
+    global $pdo;
+    
+    try {
+        // בדיקה אם יש כבר תוכניות
+        $check = $pdo->query("SELECT COUNT(*) FROM plans");
+        if ($check->fetchColumn() > 0) {
+            return true; // יש כבר תוכניות, לא צריך ליצור
+        }
+        
+        // יצירת תוכנית בסיסית
+        $stmt = $pdo->prepare("
+            INSERT INTO plans (
+                name, description, price, landing_pages_limit, 
+                contacts_limit, messages_limit, views_limit,
+                custom_domain, api_access, status
+            ) VALUES (
+                'מסלול בסיסי', 'מסלול בסיסי לעסקים קטנים', 99.00, 5, 
+                500, 1000, 5000, 0, 0, 'active'
+            )
+        ");
+        $stmt->execute();
+        
+        // יצירת תוכנית מתקדמת
+        $stmt = $pdo->prepare("
+            INSERT INTO plans (
+                name, description, price, landing_pages_limit, 
+                contacts_limit, messages_limit, views_limit,
+                custom_domain, api_access, status
+            ) VALUES (
+                'מסלול עסקי', 'מסלול מתקדם לעסקים בינוניים', 199.00, 15, 
+                2000, 5000, 20000, 1, 0, 'active'
+            )
+        ");
+        $stmt->execute();
+        
+        // יצירת תוכנית פרמיום
+        $stmt = $pdo->prepare("
+            INSERT INTO plans (
+                name, description, price, landing_pages_limit, 
+                contacts_limit, messages_limit, views_limit,
+                custom_domain, api_access, status
+            ) VALUES (
+                'מסלול פרימיום', 'מסלול פרימיום ללא מגבלות', 499.00, 0, 
+                0, 0, 0, 1, 1, 'active'
+            )
+        ");
+        $stmt->execute();
+        
+        return true;
+    } catch (PDOException $e) {
+        error_log("שגיאה ביצירת תוכנית ברירת מחדל: " . $e->getMessage());
+        return false;
+    }
+}
