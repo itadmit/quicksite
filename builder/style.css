@@ -1,15 +1,54 @@
 /* builder/style.css */
 /* סגנונות ספציפיים שלא נמצאים בטיילווינד */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@100..900&display=swap');
 
-/* עבור גרירת רכיבים */
+/* === Icon Groups and Button Styles === */
+.icon-button {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    color: #64748b;
+    background-color: #f8fafc;
+    transition: all 0.2s;
+}
+
+.icon-button:hover {
+    background-color: #f1f5f9;
+    color: #334155;
+}
+
+.icon-button.active {
+    color: #0284c7;
+    background-color: #f0f9ff;
+}
+
+.icon-group {
+    display: flex;
+    padding: 1px;
+    background-color: #f1f5f9;
+    border-radius: 8px;
+    gap: 1px;
+}
+
+.icon-group .icon-button {
+    border-radius: 6px;
+}
+
+/* === Widget Dragging and Columns === */
 .widget-dragging {
     opacity: 0.5;
     cursor: move;
+    z-index: 100 !important;
 }
 
 .column-highlight {
-    background-color: rgba(14, 165, 233, 0.1) !important;
-    border: 2px dashed rgba(14, 165, 233, 0.5) !important;
+    background-color: rgba(14, 165, 233, 0.08) !important;
+    border: 1px dashed rgba(14, 165, 233, 0.3) !important;
+    border-radius: 12px !important;
+    z-index: 5;
 }
 
 .widget-controls {
@@ -18,9 +57,12 @@
     left: 0;
     right: 0;
     display: none;
-    background-color: rgba(14, 165, 233, 0.8);
+    background-color: rgba(14, 165, 233, 0.5);
     color: white;
-    z-index: 10;
+    z-index: 20;
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    backdrop-filter: blur(2px);
 }
 
 .widget-wrapper:hover .widget-controls {
@@ -29,139 +71,700 @@
 
 .row-wrapper {
     position: relative;
-    margin-bottom: 1rem;
-    padding: 1rem 0;
+    background-color: #ffffff; /* Pure white background for rows */
+    border: 1px solid rgba(226, 232, 240, 0.2);
+    padding: 20px;
+    margin-bottom: 20px;
+    min-height: 80px; /* Minimum row height */
+    transition: all 0.2s ease;
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.01);
+}
+
+.row-wrapper:hover {
+    border-color: rgba(203, 213, 225, 0.3); /* Gray border on hover */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .row-controls {
     position: absolute;
-    top: 0;
+    top: -12px; /* Position above the row */
     left: 50%;
     transform: translateX(-50%);
     display: none;
-    background-color: rgba(14, 165, 233, 0.8);
-    color: white;
-    border-radius: 0 0 0.25rem 0.25rem;
+    background-color: #ffffff; /* White background */
+    color: #64748b; /* Subtle text */
+    border-radius: 8px; /* Rounded corners */
     z-index: 10;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    padding: 6px 10px;
+    font-size: 0.75rem;
+    border: 1px solid rgba(226, 232, 240, 0.5);
 }
 
-.row-wrapper:hover .row-controls {
+.row-wrapper:hover > .row-controls {
     display: flex;
+    gap: 10px;
 }
 
-/* כפתורי "הוסף רכיב" בעמודות ריקות */
-.column-add-placeholder {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 4rem;
-    border: 2px dashed #e5e7eb;
-    border-radius: 0.25rem;
-    color: #9ca3af;
+.row-control-button {
+    background: none;
+    border: none;
+    color: #64748b;
     cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
     transition: all 0.2s;
 }
 
-.column-add-placeholder:hover {
-    background-color: #f3f4f6;
-    border-color: #d1d5db;
-    color: #6b7280;
+.row-control-button:hover {
+    background-color: #f1f5f9;
+    color: #0284c7;
 }
 
-/* הנפשות */
+.columns-container {
+    display: flex;
+    gap: 18px; /* Space between columns */
+    min-height: 60px; /* Ensure columns container has height */
+}
+
+.column-wrapper {
+    position: relative;
+    background-color: #ffffff;
+    border: 1px solid rgba(226, 232, 240, 0.2);
+    padding: 18px;
+    flex-grow: 1;
+    flex-basis: 0; /* Allow columns to grow equally by default */
+    border-radius: 12px; /* Rounded corners */
+    min-height: 100px; /* Increased min-height for better drop target feel */
+    display: flex;
+    flex-direction: column; /* Stack widgets vertically */
+    gap: 16px; /* Space between widgets in a column */
+    transition: all 0.25s ease; /* Add transitions */
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.01);
+}
+
+.column-wrapper:hover {
+    border-color: rgba(203, 213, 225, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+}
+
+/* === עיצוב מחודש לעמודה ריקה עם פסאודו-אלמנטים === */
+.column-wrapper.is-empty {
+    background-color: #fdfdfd; /* רקע בהיר מאוד */
+    border-style: dashed; 
+    border-color: #e2e8f0; /* צבע גבול אפרפר */
+    display: flex; /* נשתמש ב-flex ליישור הפסאודו-אלמנטים */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 120px; /* הגדלת גובה מינימלי */
+    padding: 1.5rem; /* הגדלת פדינג */
+    text-align: center;
+}
+
+.column-wrapper.is-empty::before {
+    content: "\ea0d"; /* Unicode for ri-add-line */
+    font-family: 'remixicon' !important;
+    font-size: 1.8rem; 
+    color: #cbd5e1; 
+    display: block;
+    margin-bottom: 0.25rem; 
+    pointer-events: none; /* חשוב: התעלם מקליקים/גרירה */
+    transition: color 0.2s ease;
+}
+
+.column-wrapper.is-empty::after {
+    content: "גרור רכיב לכאן";
+    font-size: 0.75rem; 
+    color: #94a3b8; 
+    display: block;
+    pointer-events: none; /* חשוב: התעלם מקליקים/גרירה */
+    transition: color 0.2s ease;
+}
+
+.column-wrapper.is-empty:hover::before,
+.column-wrapper.is-empty:hover::after {
+    color: #64748b;
+}
+
+/* Special highlight for empty column when dragging a NEW widget over it */
+.column-wrapper.is-empty.column-drop-target-active {
+    border-style: solid;
+    border-color: #38bdf8;
+    box-shadow: 0 5px 15px rgba(14, 165, 233, 0.08);
+    background-color: rgba(224, 242, 254, 0.3); 
+}
+
+/* שינוי צבע הפסאודו-אלמנטים במצב פעיל */
+.column-wrapper.is-empty.column-drop-target-active::before,
+.column-wrapper.is-empty.column-drop-target-active::after {
+    color: #38bdf8;
+}
+
+/* --- Widget Styling within Columns --- */
+.widget {
+   border: 1px solid rgba(226, 232, 240, 0.3);
+   background-color: white;
+   padding: 16px;
+   border-radius: 12px;
+   cursor: grab; /* Default cursor for draggable items */
+   box-shadow: 0 1px 2px rgba(0,0,0,0.01);
+   transition: all 0.2s ease;
+   position: relative;
+   margin: 5px 0;
+   min-height: 30px;
+   @apply border border-gray-200 rounded p-2;
+   z-index: 10;
+}
+
+.widget:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02); /* Slightly larger shadow on hover */
+    transform: translateY(-1px);
+    z-index: 15;
+}
+
+.widget.selected {
+    box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.3), 0 2px 8px rgba(0,0,0,0.02);
+    outline: none;
+    z-index: 20;
+}
+
+/* --- SortableJS Helper Classes --- */
+.sortable-ghost {
+    opacity: 0.3;
+    background: rgba(224, 242, 254, 0.3); /* Tailwind sky-100 with transparency */
+    border: 1px dashed rgba(56, 189, 248, 0.7); /* Tailwind sky-500 */
+    box-shadow: none;
+}
+
+.sortable-chosen {
+    cursor: grabbing;
+}
+
+/* Highlight potential drop zones */
+.column-wrapper.sortable-drag-over {
+    /* Default highlight by SortableJS when sorting existing items */
+    background-color: rgba(240, 249, 255, 0.3); /* Tailwind sky-50 with transparency */
+    border-color: rgba(125, 211, 252, 0.7); /* Tailwind sky-300 */
+}
+
+/* Style for the source items in the right panel */
+.widget-source-item {
+    /* Base styles are set in index.php with Tailwind */
+    transition: all 0.2s ease;
+}
+
+.widget-source-item:hover {
+    transform: translateY(-2px);
+}
+
+/* Ensure interactjs dragging class doesn't interfere if still present */
+.widget-dragging {
+    /* May not be needed anymore with SortableJS */
+    opacity: 0.7; /* Override interactjs style if it was opacity: 0.75 */
+}
+
+/* === Animations === */
 .fade-in {
     animation: fadeIn 0.3s ease;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-/* הגדרות טופס */
-.settings-group {
+/* === Settings Panels === */
+.settings-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.75rem;
     margin-bottom: 1rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.5);
+}
+
+.settings-group {
+    margin-bottom: 1.5rem;
 }
 
 .settings-group:last-child {
-    border-bottom: none;
+    margin-bottom: 0;
 }
 
 .settings-title {
-    font-weight: 600;
-    margin-bottom: 0.5rem;
-    color: #374151;
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+    color: #334155;
+    font-size: 0.9rem;
 }
 
-/* פנל הגדרות ספציפיות */
+/* Settings Accordion */
+.settings-accordion {
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.settings-accordion-header {
+    background-color: #ffffff;
+    padding: 12px 16px;
+    cursor: pointer;
+    font-weight: 500;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.3);
+}
+
+.settings-accordion-header h3 {
+    font-size: 14px;
+    color: #334155;
+}
+
+.settings-accordion-content {
+    padding: 16px;
+    background-color: #fcfcfd;
+    border-radius: 0 0 12px 12px;
+}
+
+/* === Empty Canvas Message === */
+.empty-canvas-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #94a3b8;
+}
+
+.empty-canvas-message i {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: #cbd5e1;
+}
+
+.empty-canvas-message p {
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+/* Input Fields */
 .settings-input {
     width: 100%;
-    padding: 0.5rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
     font-size: 0.875rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
+    background-color: #ffffff;
+    border: 1px solid rgba(226, 232, 240, 0.7);
+    transition: all 0.2s;
+    height: 36px;
+}
+
+.settings-input:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.1);
+    outline: none;
 }
 
 .settings-select {
     width: 100%;
-    padding: 0.5rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
     font-size: 0.875rem;
-    margin-bottom: 0.5rem;
-    background-color: white;
+    margin-bottom: 0.75rem;
+    background-color: #ffffff;
+    border: 1px solid rgba(226, 232, 240, 0.7);
+    transition: all 0.2s;
+    height: 36px;
 }
 
-/* כפתורי גרירה */
-.drag-handle {
-    cursor: move;
-    color: #9ca3af;
+.settings-select:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.1);
+    outline: none;
+}
+
+/* Range slider styling */
+input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 5px;
+    outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #0284c7;
+    cursor: pointer;
+    border: 2px solid #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #0284c7;
+    cursor: pointer;
+    border: 2px solid #ffffff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Color picker styling */
+.color-input-wrapper {
+    position: relative;
+    width: 100%;
+    height: 36px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(226, 232, 240, 0.7);
+}
+
+.color-input-preview {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding: 0 0.75rem;
+    background-color: #ffffff;
+}
+
+.color-input-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
     margin-left: 0.5rem;
 }
 
-/* התאמות לסדרי עדיפות בעיבוד */
-.sortable-ghost {
-    opacity: 0.4;
-    background-color: rgba(14, 165, 233, 0.1);
+input[type="color"] {
+    opacity: 0;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
 }
 
-.sortable-chosen {
-    background-color: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+/* Drag handle for lists */
+.drag-handle {
+    cursor: grab;
+    color: #cbd5e1; /* Tailwind slate-300 - lighter */
+    padding: 0.25rem;
+    transition: color 0.2s ease;
 }
 
-/* הנפשות לפנלים */
+.drag-handle:hover {
+    color: #94a3b8; /* Tailwind slate-400 */
+}
+
+/* Panel animations */
 .panel-slide-in {
-    animation: slideIn 0.3s ease;
+    animation: slideIn 0.3s ease forwards;
 }
 
 @keyframes slideIn {
-    from { transform: translateX(100%); }
-    to { transform: translateX(0); }
+    from { transform: translateX(20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
 }
 
-/* סגנונות לכפתורי פעולה שורה */
+/* Row action buttons styling */
 .row-add-button {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 5;
+    background-color: rgba(14, 165, 233, 0.05);
+    border: 1px solid rgba(14, 165, 233, 0.1);
+    border-radius: 8px;
+    padding: 0.5rem;
+    color: #0284c7;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.row-add-button:hover {
+    background-color: rgba(14, 165, 233, 0.1);
+    border-color: rgba(14, 165, 233, 0.2);
 }
 
 .row-add-top {
-    top: -0.75rem;
+    margin-bottom: 1rem;
 }
 
 .row-add-bottom {
-    bottom: -0.75rem;
+    margin-top: 1rem;
 }
 
-/* מצב עריכה פעיל */
+/* Editing active state */
 .editing-active {
-    outline: 2px solid #0ea5e9;
-    outline-offset: 2px;
     position: relative;
+}
+
+.editing-active::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border: 1px solid #38bdf8;
+    border-radius: 12px;
+    pointer-events: none;
+}
+
+/* Typography popup */
+.typography-popup {
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+    border: 1px solid rgba(226, 232, 240, 0.5);
+    padding: 1rem;
+}
+
+/* === Control Groups === */
+.control-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.control-container {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0.75rem;
+}
+
+.control-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    margin-bottom: 0.25rem;
+}
+
+.control-value {
+    font-size: 0.875rem;
+    color: #334155;
+    margin-bottom: 0.25rem;
+}
+
+/* === Tabs Styling === */
+.tab-button {
+    border: 1px solid transparent; 
+    transition: all 0.15s ease;
+}
+
+.tab-button[data-active=true] {
+    border-color: rgba(14, 165, 233, 0.05);
+    background-color: rgba(14, 165, 233, 0.05);
+    color: #0284c7 !important;
+}
+
+/* Builder App Specific Styles */
+.builder-header {
+    background-color: #1a1a1a;
+    color: white;
+}
+
+.builder-button {
+    @apply bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-all;
+}
+
+.builder-button-neutral {
+    @apply bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded transition-all;
+}
+
+.builder-button-outline {
+    @apply border border-blue-500 text-blue-500 hover:bg-blue-50 px-4 py-2 rounded transition-all;
+}
+
+/* Row styles */
+.builder-row {
+    position: relative;
+    min-height: 50px;
+    margin-bottom: 15px;
+    @apply border border-dashed border-gray-300 rounded;
+}
+
+.builder-row:hover {
+    @apply border-blue-300 bg-blue-50;
+}
+
+.builder-row.selected {
+    @apply border-blue-500 border-2 bg-blue-50;
+}
+
+/* Column styles */
+.builder-column {
+    position: relative;
+    min-height: 50px;
+    padding: 10px;
+    @apply border border-dashed border-gray-200 rounded;
+}
+
+.builder-column:hover {
+    @apply border-violet-300 bg-violet-50;
+}
+
+.builder-column.selected {
+    @apply border-violet-500 border-2 bg-violet-50;
+}
+
+/* Widgets */
+.widget {
+    position: relative;
+    margin: 5px 0;
+    min-height: 30px;
+    @apply border border-gray-200 rounded p-2;
+    z-index: 10;
+}
+
+.widget:hover {
+    @apply border-green-300 bg-green-50;
+    z-index: 15;
+}
+
+.widget.selected {
+    @apply border-green-500 border-2 bg-green-50;
+    z-index: 20;
+}
+
+/* Widget source items */
+.widget-source-item {
+    cursor: grab;
+    @apply mb-2 p-3 bg-white border border-gray-200 rounded shadow-sm hover:shadow transition-all;
+}
+
+.widget-source-item:hover {
+    @apply border-blue-300 bg-blue-50;
+}
+
+/* Controls that appear on hover */
+.element-controls {
+    position: absolute;
+    top: -15px;
+    right: 10px;
+    display: none;
+    @apply bg-white border border-gray-200 rounded shadow-sm text-xs;
+    z-index: 30;
+}
+
+.builder-row:hover .element-controls,
+.builder-column:hover .element-controls,
+.widget:hover .element-controls {
+    display: flex;
+}
+
+/* Drag drop placeholder */
+.drag-placeholder {
+    @apply border-2 border-dashed border-blue-400 bg-blue-100 rounded;
+    min-height: 50px;
+    margin: 5px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #4b5563;
+    position: relative;
+    z-index: 5;
+}
+
+/* טיפול נוסף באזורי גרירה */
+.drag-over {
+    @apply border-2 border-blue-500 bg-blue-100;
+    z-index: 5;
+}
+
+.column-drop-indicator {
+    background-color: rgba(59, 130, 246, 0.3);
+    border: 2px dashed #3b82f6;
+    border-radius: 4px;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 5px 0;
+    z-index: 5;
+}
+
+/* Settings panel styles */
+.settings-panel {
+    background-color: #f9fafb;
+    border-left: 1px solid #e5e7eb;
+}
+
+.tab-button {
+    @apply px-4 py-2 text-gray-500 hover:text-gray-700 cursor-pointer;
+}
+
+.tab-button.active {
+    @apply text-blue-500 border-b-2 border-blue-500;
+}
+
+/* Responsive controls */
+.device-button {
+    @apply p-2 text-gray-500 hover:text-gray-700 cursor-pointer;
+}
+
+.device-button.active {
+    @apply text-blue-500;
+}
+
+/* Column layout chooser */
+.column-choice {
+    @apply p-3 border border-gray-200 rounded cursor-pointer hover:bg-blue-50 hover:border-blue-300;
+}
+
+.columns-preview {
+    display: flex;
+    width: 100%;
+    height: 30px;
+    gap: 4px;
+}
+
+.columns-preview .col-preview {
+    background-color: #e5e7eb;
+    height: 100%;
+    border-radius: 2px;
+}
+
+/* שיפור סמנים לשורות ועמודות ריקות */
+.empty-row-indicator {
+    height: 70px;
+    border: 2px dashed #d1d5db;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    margin-bottom: 1rem;
+    background-color: #f9fafb;
+    z-index: 5;
+}
+
+.empty-column-indicator {
+    min-height: 100px;
+    border: 2px dashed #d1d5db;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+    margin: 5px 0;
+    background-color: #f9fafb;
+    z-index: 5;
+}
+
+/* Builder App Specific Styles */
+/* הוספה: עיצוב מיוחד לקונטיינר הראשי כשהוא ריק */
+#page-content.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px; /* או גובה אחר שמתאים לפריסה */
+    height: 100%; /* נסה למלא את הגובה הזמין */
+    padding: 2rem; /* ריווח פנימי */
+}
+
+.builder-header {
+    background-color: #1a1a1a;
+    color: white;
 }
