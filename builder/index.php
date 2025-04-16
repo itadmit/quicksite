@@ -236,9 +236,19 @@ if ($title) {
                  <button class="tab-button flex-1 py-2.5 px-4 text-center text-sm font-medium text-gray-500 hover:text-gray-700 rounded-lg ml-1 transition-colors focus:outline-none data-[active=true]:text-primary-600 data-[active=true]:bg-primary-50" data-tab="advanced" data-active="false">מתקדם</button>
             </div>
             <div id="tab-content-area" class="tab-content flex-grow">
-                <p class="text-gray-500 text-sm">בחר אלמנט לעריכה.</p>
+                <!-- הוספת ה-divs הנדרשים עבור תוכן הטאבים -->
+                <div id="tab-content-content" class="tab-panel" style="display: block;">
+                    <!-- תוכן טאב 'תוכן' יופיע כאן -->
+                    <p class="text-gray-500 text-sm p-4 text-center">בחר אלמנט לעריכה.</p>
+                </div>
+                <div id="tab-content-design" class="tab-panel" style="display: none;">
+                    <!-- תוכן טאב 'עיצוב' יופיע כאן -->
+                </div>
+                <div id="tab-content-advanced" class="tab-panel" style="display: none;">
+                    <!-- תוכן טאב 'מתקדם' יופיע כאן -->
+                </div>
 
-                <!-- Templates for Controls -->
+                <!-- Templates for Controls (can stay here or be moved) -->
                 <template id="padding-template">
                     <div class="settings-accordion mb-4">
                         <div class="settings-accordion-header flex justify-between items-center mb-3">

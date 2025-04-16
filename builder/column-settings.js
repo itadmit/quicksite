@@ -39,38 +39,72 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
     // --- Layout Group ---
     const { accordionItem: layoutAccordion, contentDiv: layoutContent } = createSettingsGroup('פריסה', true);
 
-    // Column Width (Existing logic - check if needs adjustment)
+    // Column Width (Revised logic)
     const widthContainer = document.createElement('div');
     widthContainer.className = 'mb-4';
     const widthLabel = document.createElement('label');
     widthLabel.className = 'block text-sm text-gray-600 mb-1';
     widthLabel.textContent = 'רוחב עמודה (%)';
     widthContainer.appendChild(widthLabel);
-    const widthValue = parseFloat(config.widthPercent).toFixed(2);
-    const widthSlider = createSlider(null, widthValue, 5, 95, 0.1, (value) => { 
+    
+    const initialWidthValue = parseFloat(config.widthPercent).toFixed(2);
+
+    // Create slider - immediate callback only updates number input and config (NO state update)
+    const widthSliderWrapper = createSlider(null, initialWidthValue, 5, 95, 0.1, (value) => {
         const newValue = parseFloat(value).toFixed(2);
-        config.widthPercent = newValue;
-        widthNumberInput.querySelector('input').value = newValue;
-        handleWidthChange(columnData.id, newValue, updateCallback, rowData);
+        config.widthPercent = newValue; // Update config directly for immediate feedback
+        widthNumberInput.querySelector('input').value = newValue; // Update linked input visually
+        // DO NOT call handleWidthChange or updateCallback here
     }, '%');
-    const widthNumberInput = createNumberInput(null, widthValue, (value) => { 
+    const sliderInput = widthSliderWrapper.querySelector('input[type="range"]');
+    sliderInput.className += ' mb-1';
+
+    // Create number input - immediate callback only updates slider and config (NO state update)
+    const widthNumberInput = createNumberInput(null, initialWidthValue, (value) => {
         const newValue = parseFloat(value).toFixed(2);
-        const clampedValue = Math.max(5, Math.min(95, newValue));
-        config.widthPercent = clampedValue;
-        widthSlider.querySelector('input[type="range"]').value = clampedValue;
-        widthNumberInput.querySelector('input').value = clampedValue;
-        handleWidthChange(columnData.id, clampedValue, updateCallback, rowData);
+        const clampedValue = Math.max(5, Math.min(95, newValue)); // Clamp for visual consistency
+        config.widthPercent = clampedValue; // Update config directly
+        sliderInput.value = clampedValue; // Update linked input visually
+        widthNumberInput.querySelector('input').value = clampedValue; // Ensure number input shows clamped value
+        // DO NOT call handleWidthChange or updateCallback here
     }, 5, 95, 0.1);
-    widthSlider.querySelector('input[type="range"]').className += ' mb-1'; 
-    widthContainer.appendChild(widthSlider);
+    const numberInput = widthNumberInput.querySelector('input');
+
+    // Function to finalize width change (called on 'change' event)
+    const finalizeWidthChange = (event) => {
+        let finalValue = parseFloat(event.target.value);
+        // Clamp the final value definitively
+        finalValue = Math.max(5, Math.min(95, finalValue));
+        const finalValueStr = finalValue.toFixed(2);
+
+        // Ensure both inputs and config reflect the final clamped value
+        config.widthPercent = finalValueStr;
+        sliderInput.value = finalValue;
+        numberInput.value = finalValueStr; 
+
+        console.log(`Finalizing width change for ${columnData.id} to ${finalValueStr}%`);
+        // Now call the function that updates state and triggers full callback
+        handleWidthChange(columnData.id, finalValueStr, updateCallback, rowData);
+    };
+
+    // Add 'change' event listeners to trigger the final update
+    sliderInput.addEventListener('change', finalizeWidthChange);
+    numberInput.addEventListener('change', finalizeWidthChange);
+    // Consider 'blur' for number input as well? 'change' might be sufficient.
+    // numberInput.addEventListener('blur', finalizeWidthChange); 
+
+    widthContainer.appendChild(widthSliderWrapper);
     widthContainer.appendChild(widthNumberInput);
     layoutContent.appendChild(widthContainer);
 
     // Vertical Alignment of Widgets
     const vAlignContainer = document.createElement('div');
     vAlignContainer.className = 'mb-4';
+    const vAlignLabel = document.createElement('label');
+    vAlignLabel.className = 'block text-sm text-gray-600 mb-1';
+    vAlignLabel.textContent = 'יישור אנכי (ווידג\'טים)';
+    vAlignContainer.appendChild(vAlignLabel);
     vAlignContainer.appendChild(createSelect(
-        'יישור אנכי (ווידג\'טים)',
         [
             { value: 'flex-start', label: 'למעלה' },
             { value: 'center', label: 'מרכז' },
@@ -87,8 +121,11 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
     // Horizontal Alignment of Widgets
     const hAlignContainer = document.createElement('div');
     hAlignContainer.className = 'mb-4';
+    const hAlignLabel = document.createElement('label');
+    hAlignLabel.className = 'block text-sm text-gray-600 mb-1';
+    hAlignLabel.textContent = 'יישור אופקי (ווידג\'טים)';
+    hAlignContainer.appendChild(hAlignLabel);
     hAlignContainer.appendChild(createSelect(
-        'יישור אופקי (ווידג\'טים)',
         [
             { value: 'flex-start', label: 'שמאל' },
             { value: 'center', label: 'מרכז' },
@@ -112,8 +149,11 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
     // HTML Tag
     const tagContainer = document.createElement('div');
     tagContainer.className = 'mb-4';
+    const tagLabel = document.createElement('label');
+    tagLabel.className = 'block text-sm text-gray-600 mb-1';
+    tagLabel.textContent = 'תגית HTML';
+    tagContainer.appendChild(tagLabel);
     tagContainer.appendChild(createSelect(
-        'תגית HTML',
         [
             { value: 'div', label: 'div' },
             { value: 'aside', label: 'aside' },
@@ -142,10 +182,17 @@ export function populateColumnDesignTab(panel, columnData, updateCallback) {
 
     // --- Background --- 
     const { accordionItem: bgAccordion, contentDiv: bgContent } = createSettingsGroup('רקע', true);
-    bgContent.appendChild(createColorInput('צבע רקע', styles.backgroundColor || '#ffffff', (value) => {
-        styles.backgroundColor = value;
-        updateCallback();
-    }));
+    const bgColorLabel = document.createElement('label');
+    bgColorLabel.className = 'block text-sm text-gray-600 mb-1';
+    bgColorLabel.textContent = 'צבע רקע';
+    bgContent.appendChild(bgColorLabel);
+    bgContent.appendChild(createColorInput(
+        styles.backgroundColor || '#ffffff',
+        (value) => {
+            styles.backgroundColor = value;
+            updateCallback();
+        }
+    ));
     panel.appendChild(bgAccordion);
 
     // --- Padding Section --- 
@@ -161,7 +208,14 @@ export function populateColumnDesignTab(panel, columnData, updateCallback) {
 
     // --- Border Section ---
     const { accordionItem: borderAccordion, contentDiv: borderContent } = createSettingsGroup('מסגרת (Border)');
-    borderContent.appendChild(createColorInput('צבע', styles.border.color, (value) => { styles.border.color = value; updateCallback(); }));
+    const borderColorLabel = document.createElement('label');
+    borderColorLabel.className = 'block text-sm text-gray-600 mb-1';
+    borderColorLabel.textContent = 'צבע';
+    borderContent.appendChild(borderColorLabel);
+    borderContent.appendChild(createColorInput(
+        styles.border.color || '#000000', // Default to black if undefined
+        (value) => { styles.border.color = value; updateCallback(); }
+    ));
     const borderControlsRow = document.createElement('div');
     borderControlsRow.className = 'grid grid-cols-2 gap-2 mt-3';
     const widthWithLabel = document.createElement('div'); widthWithLabel.className = 'flex flex-col';
@@ -172,9 +226,9 @@ export function populateColumnDesignTab(panel, columnData, updateCallback) {
     const styleLabel = document.createElement('span'); styleLabel.className = 'text-xs text-gray-500 mb-1'; styleLabel.textContent = 'סגנון';
     styleWithLabel.appendChild(styleLabel);
     styleWithLabel.appendChild(createSelect(
-        null, // No main label
         [{value: 'solid', label:'רציף'}, {value: 'dashed', label:'מקווקו'}, {value: 'dotted', label:'נקודות'}, {value: 'none', label: 'ללא'}],
-        styles.border.style, (value) => { styles.border.style = value; updateCallback(); }
+        styles.border.style,
+        (value) => { styles.border.style = value; updateCallback(); }
     ));
     borderControlsRow.appendChild(widthWithLabel);
     borderControlsRow.appendChild(styleWithLabel);
@@ -186,10 +240,14 @@ export function populateColumnDesignTab(panel, columnData, updateCallback) {
     const radiusContainer = document.createElement('div');
     radiusContainer.className = 'grid grid-cols-2 gap-2';
     radiusContainer.appendChild(createNumberInput(null, parseInt(styles.borderRadius.value) || 0, (value) => { styles.borderRadius.value = parseInt(value) || 0; updateCallback(); }, 0, 100));
-    radiusContainer.appendChild(createSelect([
-        { value: 'px', label: 'px' },
-        { value: '%', label: '%' }
-    ], styles.borderRadius.unit, (value) => { styles.borderRadius.unit = value; updateCallback(); }));
+    radiusContainer.appendChild(createSelect(
+        [
+            { value: 'px', label: 'px' },
+            { value: '%', label: '%' }
+        ],
+        styles.borderRadius.unit,
+        (value) => { styles.borderRadius.unit = value; updateCallback(); }
+    ));
     radiusContent.appendChild(radiusContainer);
     panel.appendChild(radiusAccordion);
 }
@@ -222,10 +280,20 @@ export function populateColumnAdvancedTab(panel, columnData, updateCallback) {
     // --- Shadow Section ---
     const { accordionItem: shadowAccordion, contentDiv: shadowContent } = createSettingsGroup('צל (Shadow)');
     const shadowTypeRow = document.createElement('div'); shadowTypeRow.className = 'mb-3';
-    shadowTypeRow.appendChild(createSelect('סוג צל', [
-        {value: 'none', label: 'ללא'}, 
-        {value: 'drop-shadow', label: 'Drop Shadow'}
-    ], styles.boxShadow.type, (value) => { styles.boxShadow.type = value; updateCallback(); }));
+    const shadowTypeLabel = document.createElement('label');
+    shadowTypeLabel.className = 'block text-sm text-gray-600 mb-1';
+    shadowTypeLabel.textContent = 'סוג צל';
+    shadowTypeRow.appendChild(shadowTypeLabel);
+    shadowTypeRow.appendChild(createSelect(
+        [{value: 'none', label: 'ללא'}, 
+         {value: 'drop-shadow', label: 'Drop Shadow'}
+        ],
+        styles.boxShadow.type, 
+        (value) => { 
+            styles.boxShadow.type = value; 
+            populateColumnAdvancedTab(panel, columnData, updateCallback); 
+        }
+    ));
     shadowContent.appendChild(shadowTypeRow);
     // Add inputs only if type is not 'none'
     if (styles.boxShadow.type !== 'none') {
@@ -237,7 +305,15 @@ export function populateColumnAdvancedTab(panel, columnData, updateCallback) {
         shadowBlurSpreadRow.appendChild(createNumberInput('Blur', parseInt(styles.boxShadow.blur) || 0, (value) => { styles.boxShadow.blur = parseInt(value) || 0; updateCallback(); }, 0));
         shadowBlurSpreadRow.appendChild(createNumberInput('Spread', parseInt(styles.boxShadow.spread) || 0, (value) => { styles.boxShadow.spread = parseInt(value) || 0; updateCallback(); }));
         shadowContent.appendChild(shadowBlurSpreadRow);
-        shadowContent.appendChild(createColorInput('צבע', styles.boxShadow.color, (value) => { styles.boxShadow.color = value; updateCallback(); }, true));
+        const shadowColorLabel = document.createElement('label');
+        shadowColorLabel.className = 'block text-sm text-gray-600 mb-1';
+        shadowColorLabel.textContent = 'צבע';
+        shadowContent.appendChild(shadowColorLabel);
+        shadowContent.appendChild(createColorInput(
+            rgbaToHex(styles.boxShadow.color) || '#000000', 
+            (value) => { styles.boxShadow.color = value; updateCallback(); },
+            true // Allow opacity
+        ));
     }
     panel.appendChild(shadowAccordion);
 

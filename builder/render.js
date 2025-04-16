@@ -667,3 +667,138 @@ function moveColumn(columnId, direction) {
     console.log(`Requesting move ${direction} for column:`, columnId);
     window.dispatchEvent(new CustomEvent('move-column', { detail: { id: columnId, direction }}));
 }
+
+// ==========================================
+// NEW: Apply Styles Directly to Element
+// ==========================================
+export function applyStylesToElement(element, elementData) {
+    if (!element || !elementData || !elementData.config) {
+        console.warn('applyStylesToElement: Missing element or data');
+        return;
+    }
+
+    const config = elementData.config;
+    const styles = config.styles || {};
+    const typo = styles.typography || {};
+    const border = styles.border || {};
+    const boxShadow = styles.boxShadow || {};
+    const padding = styles.padding || {};
+
+    // --- Reset Inline Styles (to avoid conflicts with potentially removed styles) ---
+    element.style.padding = '';
+    element.style.opacity = '';
+    element.style.border = '';
+    element.style.boxShadow = '';
+    element.style.color = '';
+    element.style.backgroundColor = '';
+    element.style.fontFamily = '';
+    element.style.fontWeight = '';
+    element.style.fontSize = '';
+    element.style.lineHeight = '';
+    element.style.letterSpacing = '';
+    // Note: text-align is handled by classes
+    // --- הוספה: איפוס ספציפי לרוחב ו-flex-basis ---
+    element.style.width = '';
+    element.style.flexBasis = '';
+    element.style.flexGrow = ''; // Usually 0 for fixed columns
+    element.style.flexShrink = ''; // Usually 0 for fixed columns
+    // -------------------------------------------
+
+    // --- Apply General Styles ---
+    // --- הוספה: החלת רוחב ו-flex-basis --- 
+    if (elementData.type === 'column' && config.widthPercent) {
+        const widthVal = `${config.widthPercent}%`;
+        element.style.width = widthVal;
+        element.style.flexBasis = widthVal;
+        element.style.flexGrow = '0'; // Ensure it doesn't grow
+        element.style.flexShrink = '0'; // Ensure it doesn't shrink
+        console.log(`[applyStyles] Applied width/basis ${widthVal} to ${elementData.id}`);
+    }
+    // ---------------------------------------
+    // Padding
+    if (padding.top) element.style.paddingTop = padding.top + 'px';
+    if (padding.right) element.style.paddingRight = padding.right + 'px';
+    if (padding.bottom) element.style.paddingBottom = padding.bottom + 'px';
+    if (padding.left) element.style.paddingLeft = padding.left + 'px';
+
+    // Opacity
+    if (styles.opacity !== undefined && styles.opacity !== null) {
+        element.style.opacity = styles.opacity;
+    }
+
+    // Border
+    if (border.style && border.style !== 'none' && parseInt(border.width) > 0) {
+        element.style.borderWidth = `${border.width}px`;
+        element.style.borderStyle = border.style;
+        element.style.borderColor = border.color || '#000000';
+    } else {
+        element.style.border = 'none'; // Ensure border is removed if set to none/0 width
+    }
+
+    // Shadow
+    if (boxShadow.type && boxShadow.type !== 'none') {
+        element.style.boxShadow = `${boxShadow.x || '0px'} ${boxShadow.y || '0px'} ${boxShadow.blur || '0px'} ${boxShadow.spread || '0px'} ${boxShadow.color || 'rgba(0,0,0,0.1)'}`;
+    } else {
+        element.style.boxShadow = 'none';
+    }
+    
+    // Background Color
+    if (styles.backgroundColor) {
+         element.style.backgroundColor = styles.backgroundColor;
+    }
+
+    // --- Apply Text-Specific Styles (If it's a text widget - check type?) ---
+    // Corrected check: Access type directly from elementData for widgets
+    if (elementData.type === 'widget' && elementData.config.type === 'text') { 
+        // Color
+        if (styles.color) {
+            element.style.color = styles.color;
+        }
+        // Typography
+        if (typo.fontFamily) {
+            element.style.fontFamily = typo.fontFamily;
+        }
+        if (typo.fontWeight) {
+            element.style.fontWeight = typo.fontWeight;
+        }
+        if (typo.fontSize && typo.fontSize.endsWith('px')) { // Check if pixel value exists
+            element.style.fontSize = typo.fontSize;
+        } else {
+             element.style.fontSize = ''; // Remove inline pixel size if not set
+        }
+        if (typo.lineHeight) {
+            element.style.lineHeight = typo.lineHeight;
+        }
+        if (typo.letterSpacing) {
+            element.style.letterSpacing = typo.letterSpacing;
+        }
+
+        // Text Alignment (using classes)
+        const alignClasses = ['text-left', 'text-center', 'text-right', 'text-justify'];
+        element.classList.remove(...alignClasses);
+        if (config.textAlign && alignClasses.includes(config.textAlign)) {
+            element.classList.add(config.textAlign);
+        }
+    }
+    
+    // --- Apply Custom ID and Classes ---
+    if (config.customId) {
+        element.id = config.customId;
+    } else {
+         element.removeAttribute('id');
+    }
+    
+    // Handle custom classes carefully
+    const previousCustomClasses = element.dataset.customClasses ? element.dataset.customClasses.split(' ') : [];
+    element.classList.remove(...previousCustomClasses);
+    
+    if (config.customClass) {
+        const newCustomClasses = config.customClass.split(' ').filter(c => c.trim() !== '');
+        element.classList.add(...newCustomClasses);
+        element.dataset.customClasses = newCustomClasses.join(' '); // Store for removal next time
+    } else {
+         element.removeAttribute('data-custom-classes');
+    }
+
+    console.log('Styles applied directly to:', element);
+}

@@ -217,6 +217,26 @@ function handleElementSelectionRequest(event) {
     const { type, id } = event.detail;
     console.log(`Handling selection request for ${type}: ${id}`);
 
+    // --- מניעת טעינה מחדש אם אותו אלמנט נבחר ---
+    if (selectedElement && selectedElement.id === id) {
+        console.log('Element already selected, skipping settings panel reload.');
+        // Optionally, re-apply visual cues if needed, but avoid full reload
+        const currentElement = document.querySelector(`[data-element-id="${id}"]`);
+        if (currentElement && !currentElement.classList.contains('selected')) {
+            // Re-apply selection visuals without triggering full load
+             if (selectedElement.type === 'widget') {
+                currentElement.classList.add('selected', 'ring-2', 'ring-primary-500', 'ring-offset-1');
+            } else if (selectedElement.type === 'row') {
+                currentElement.querySelector('.row-header')?.classList.add('bg-blue-50');
+                currentElement.classList.add('selected'); // Add generic selected if needed
+            } else if (selectedElement.type === 'column') {
+                currentElement.classList.add('selected', 'ring-2', 'ring-indigo-500', 'ring-offset-1');
+            }
+        }
+        return; // Stop further processing
+    }
+    // --------------------------------------------------
+
     const newlySelected = { type, id };
 
     // Deselect previous
@@ -250,7 +270,7 @@ function handleElementSelectionRequest(event) {
     console.log(`Element selected: ${selectedElement.type} - ${selectedElement.id}`);
 
     // Load settings for the selected element
-    const currentTab = document.querySelector('.tab-button[data-active="true"]')?.dataset.tab || 'content'; // ברירת מחדל לתוכן
+    const currentTab = document.querySelector('.tab-button[data-active="true"]')?.dataset.tab || 'content';
     loadSettingsTabContent(currentTab);
 }
 
@@ -291,15 +311,38 @@ function loadSettingsTabContent(tabName) {
 
     // Define the update callback
     const updateCallback = () => {
-        console.log("Setting changed, updating state and rerendering...");
         savePageState();
-        // Re-render only the affected element? Or the whole page?
-        // For now, re-render the whole page for simplicity
-        Render.renderPageContent(pageState, pageContentContainer);
-        // Re-initialize SortableJS after render
-        initSortables();
-        // Reselect the element visually (rerendering might remove selection classes)
-        handleElementSelectionRequest({ detail: { type: selectedElement.type, id: selectedElement.id } });
+
+        if (selectedElement) {
+            const elementData = findElementData(pageState, selectedElement.id);
+
+            if (selectedElement.type === 'column') {
+                const rowData = findRowContainingElement(pageState, selectedElement.id);
+                if (rowData && rowData.columns) {
+                    console.log('Column changed, applying styles to all columns in row:', rowData.id);
+                    rowData.columns.forEach(col => {
+                        const colNode = document.querySelector(`[data-element-id="${col.id}"]`);
+                        if (colNode) {
+                            Render.applyStylesToElement(colNode, col);
+                        } else {
+                            console.warn(`Could not find DOM node for column ${col.id} during sibling update.`);
+                        }
+                    });
+                } else {
+                    console.warn('Could not find parent row data for column update.');
+                }
+            } else if (elementData) {
+                const elementNode = document.querySelector(`[data-element-id="${selectedElement.id}"]`);
+                if (elementNode) {
+                    console.log('Applying styles directly to selected element (non-column):', selectedElement.id);
+                    Render.applyStylesToElement(elementNode, elementData);
+                } else {
+                    console.warn('Could not find element node for direct style update (non-column).');
+                }
+            } else {
+                 console.warn('Could not find element data for style update.');
+            }
+        }
     };
 
     // Populate the active tab based on element type
@@ -317,9 +360,13 @@ function loadSettingsTabContent(tabName) {
             break;
         case 'column':
             // Placeholder for column settings
-            if (tabName === 'content') {
-                populateColumnContentTab(activeTabPanel, elementData, updateCallback);
-            } else if (tabName === 'design') {
+            // --- מציאת נתוני השורה והעברתם ---
+            const parentRowData = findRowContainingElement(pageState, elementData.id);
+            // ----------------------------------
+            if (tabName === 'content' && typeof populateColumnContentTab === 'function') {
+                // --- שינוי: הוספת parentRowData לקריאה ---
+                populateColumnContentTab(activeTabPanel, elementData, updateCallback, parentRowData);
+            } else if (tabName === 'design' && typeof populateColumnDesignTab === 'function') {
                 populateColumnDesignTab(activeTabPanel, elementData, updateCallback);
             } else if (tabName === 'advanced') {
                 populateColumnAdvancedTab(activeTabPanel, elementData, updateCallback);
@@ -363,6 +410,21 @@ function findElementData(state, elementId) {
     }
     return null; // Not found
 }
+
+// --- הוספה מחדש: פונקציית עזר למציאת השורה שמכילה אלמנט ---
+function findRowContainingElement(state, elementId) {
+    for (const row of state) {
+        if (row.id === elementId) return row; // Element is the row itself
+        for (const column of row.columns) {
+            if (column.id === elementId) return row; // Found in this row's columns
+            for (const widget of column.widgets) {
+                if (widget.id === elementId) return row; // Found in this row's widgets
+            }
+        }
+    }
+    return null; // Row not found
+}
+// ---------------------------------------------------------
 
 // Function to get the corresponding module for a widget type
 function getWidgetModule(widgetType) {
