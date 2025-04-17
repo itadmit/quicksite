@@ -1,0 +1,356 @@
+/* Custom styles for the builder UI */
+
+/* Ensure full height layout */
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+/* Main builder layout */
+.builder-container {
+    display: flex;
+    height: 100vh; /* Full viewport height */
+}
+
+/* Preview area */
+#preview-area {
+    flex-grow: 1; /* Takes remaining space */
+    overflow-y: auto; /* Allow scrolling */
+    background-color: #f7fafc; /* Light gray background */
+    transition: padding 0.3s ease-in-out;
+    position: relative; /* Needed for absolute positioning of overlays/controls */
+}
+
+/* Centering the page content within the preview area */
+#page-content {
+    margin: 2rem auto; /* Top/bottom margin, centered horizontally */
+    background-color: white;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    min-height: 300px; /* Minimum height for better visibility */
+    transition: max-width 0.3s ease; /* Smooth transition for responsive */
+}
+
+/* Styles for different responsive views */
+#preview-area.view-tablet #page-content {
+    /* max-width: 768px; -- applied via JS */
+}
+
+#preview-area.view-mobile #page-content {
+    /* max-width: 420px; -- applied via JS */
+}
+
+/* --- Styling for Rows and Columns --- */
+.row-wrapper {
+    /* Add any default row styling here if needed */
+    position: relative;
+    margin-bottom: 1rem; /* Add space between rows */
+}
+
+.columns-container {
+    /* Default gap between columns if not overridden by settings */
+    /* gap: 1rem; - Handled by settings now */
+}
+
+.column-wrapper {
+    min-height: 100px; /* Ensure empty columns are clickable and have good height */
+    transition: all 0.2s ease-in-out;
+    position: relative; /* Needed for absolute positioning of controls */
+    /* עיצוב עמודות - יותר בולט */
+    border: 2px dashed #a0aec0; /* מסגרת מקווקוות יותר כהה ורחבה */
+    padding: 1rem; /* ריפוד פנימי גדול יותר */
+    margin: 0.5rem; /* מרווח גדול יותר בין עמודות */
+    border-radius: 4px; /* פינות מעוגלות */
+    background-color: #f8fafc; /* רקע בהיר מאוד */
+}
+
+/* עיצוב ההודעה "גרור רכיב לכאן" */
+.column-wrapper:empty::before,
+.column-wrapper.is-empty::before {
+    content: "גרור רכיב לכאן";
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    min-height: 80px;
+    color: #a0aec0; /* צבע טקסט אפור בהיר */
+    font-size: 0.9rem;
+    font-style: italic;
+    text-align: center;
+    background-color: #f0f4f8; /* רקע אפור בהיר מאוד */
+    border-radius: 4px;
+    border: 1px dashed #cbd5e0;
+}
+
+/* כאשר יש תוכן בעמודה, נסתיר את ההודעה "גרור רכיב לכאן" */
+.column-wrapper:not(.is-empty)::before {
+    display: none;
+}
+
+/* Hover effect for empty columns */
+.column-wrapper.is-empty:hover {
+    background-color: rgba(66, 153, 225, 0.1); /* יותר צבע כחול בהיר ברחף */
+    border-color: #4299e1; /* גבול כחול בהיר ברחף */
+}
+
+/* Selection highlight for columns */
+.column-wrapper.selected {
+    border-color: #3182ce; /* גבול כחול כהה יותר כשנבחר */
+    background-color: rgba(66, 153, 225, 0.05);
+    box-shadow: 0 0 0 1px #63b3ed;
+}
+
+/* --- Styling for Widgets --- */
+.widget-wrapper {
+    position: relative; /* Needed for toolbar */
+    margin-bottom: 0.75rem; /* מרווח קטן בין ווידג'טים */
+    border-radius: 4px; /* פינות מעוגלות */
+}
+
+/* Selection highlight for widgets */
+.widget-wrapper.selected {
+    box-shadow: 0 0 0 2px #4299e1;
+    z-index: 20; /* Ensure selected widget is above columns/rows */
+}
+
+/* Styling for widget placeholder/content */
+.widget-content {
+    /* Add any default widget content styling */
+    min-height: 30px; /* Ensure widgets have some minimum height */
+    padding: 0.5rem;
+}
+
+/* עיצוב לסרגל הכלים של ווידג'ט */
+.widget-toolbar {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: #fff;
+    border-radius: 6px;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+    z-index: 40;
+    display: flex;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    overflow: hidden; /* חשוב כדי למנוע את הבעיה של חריגת הובר מהפינות */
+    border: 1px solid #e2e8f0;
+}
+
+.widget-wrapper:hover .widget-toolbar {
+    opacity: 1;
+}
+
+.widget-toolbar-button {
+    background: none;
+    border: none;
+    color: #4a5568;
+    padding: 5px 10px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.widget-toolbar-button:hover {
+    background-color: rgba(66, 153, 225, 0.1);
+    color: #3182ce;
+}
+
+/* --- Settings Panel --- */
+#settings-panel {
+    width: 320px; /* Fixed width */
+    flex-shrink: 0; /* Prevent shrinking */
+    background-color: white;
+    border-left: 1px solid #e2e8f0; /* Separator line */
+    overflow-y: auto; /* Allow scrolling for settings */
+    display: flex;
+    flex-direction: column;
+}
+
+#settings-tabs-container {
+    /* Styles for the tab container */
+    border-bottom: 1px solid #e2e8f0;
+    flex-shrink: 0; /* Prevent shrinking */
+}
+
+#settings-tabs {
+    display: flex;
+}
+
+.tab-button {
+    flex-grow: 1;
+    padding: 0.75rem 0.5rem;
+    text-align: center;
+    font-size: 0.875rem; /* text-sm */
+    font-weight: 500; /* font-medium */
+    color: #4a5568; /* text-gray-600 */
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+.tab-button:hover {
+    color: #2b6cb0; /* text-blue-600 */
+}
+
+.tab-button[data-active="true"] {
+    color: #3182ce; /* text-blue-500 */
+    border-bottom-color: #3182ce; /* border-blue-500 */
+}
+
+#tab-content-area {
+    flex-grow: 1; /* Takes remaining vertical space */
+    padding: 1rem; 
+    overflow-y: auto; /* Allow content area to scroll if needed */
+}
+
+/* Placeholder styling */
+#settings-panel-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #a0aec0; /* text-gray-400 */
+    text-align: center;
+    padding: 2rem;
+}
+
+/* --- Accordion Styling --- */
+.settings-accordion-item {
+    border-bottom: 1px solid #edf2f7; /* Light border between items */
+}
+
+.settings-accordion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0; /* Vertical padding only */
+    cursor: pointer;
+    user-select: none; 
+}
+
+.settings-accordion-header:hover .settings-accordion-title {
+    color: #2b6cb0;
+}
+
+.settings-accordion-title {
+    font-weight: 600; /* font-semibold */
+    font-size: 0.875rem; /* text-sm */
+    color: #4a5568; /* text-gray-700 */
+}
+
+.settings-accordion-icon {
+    transition: transform 0.2s ease-in-out;
+    color: #718096; /* text-gray-500 */
+}
+
+.settings-accordion-header[aria-expanded="true"] .settings-accordion-icon {
+    transform: rotate(180deg);
+}
+
+.settings-accordion-content {
+    padding-bottom: 1rem; /* Space below content when open */
+}
+
+/* --- Widget Source List --- */
+#widget-source-list {
+    /* Styling for the list container */
+}
+
+.widget-source-item {
+    cursor: grab;
+    /* Add other styling as needed */
+}
+
+/* --- SortableJS Ghost/Chosen Styling --- */
+.sortable-ghost {
+    opacity: 0.4;
+    background-color: #ebf4ff; /* Light blue */
+}
+
+.sortable-chosen {
+    /* Optional: style for the item actively being dragged */
+    /* Example: box-shadow: 0 4px 8px rgba(0,0,0,0.1); */
+}
+
+.sortable-ghost-row {
+     background-color: #c3dafe;
+     border: 2px dashed #4299e1;
+     height: 50px; /* Example height */
+}
+.sortable-chosen-row {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.sortable-ghost-col {
+     background-color: #d6bcfa;
+     border: 2px dashed #805ad5;
+     min-height: 50px;
+}
+.sortable-chosen-col {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Highlight for empty column drop target */
+.column-wrapper.is-empty.column-drop-target-active {
+    background-color: #c6f6d5 !important; /* Light green background */
+    outline: 2px dashed #48bb78; /* Green dashed outline */
+    outline-offset: 2px;
+}
+
+
+/* Hidden classes based on breakpoints */
+/* Hide elements meant only for desktop on smaller screens */
+body[data-responsive-view="tablet"] .hidden-desktop,
+body[data-responsive-view="mobile"] .hidden-desktop {
+    display: none !important; 
+}
+
+/* Hide elements meant only for tablet/desktop on mobile */
+body[data-responsive-view="mobile"] .hidden-tablet {
+    display: none !important; 
+}
+
+/* Hide elements meant only for mobile on larger screens */
+body[data-responsive-view="desktop"] .hidden-mobile,
+body[data-responsive-view="tablet"] .hidden-mobile {
+    display: none !important; 
+}
+
+/* --- Empty State Styling --- */
+#page-content.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none; /* Remove shadow when empty */
+    background-color: transparent; /* Remove background when empty */
+}
+
+/* --- Column Choice Popover --- */
+#column-choice-popover {
+  position: absolute; /* Or fixed, depending on desired behavior */
+  /* Add positioning styles (top, left, etc.) relative to the addRowButton if needed */
+  z-index: 50;
+}
+
+/* --- Responsive Controls --- */
+#responsive-controls .responsive-button[data-active="true"] {
+    background-color: #e2e8f0; /* bg-gray-200 */
+    color: #2d3748; /* text-gray-800 */
+}
+
+/* --- Kebab Menu / Column Toolbar --- */
+.column-toolbar.hidden {
+    display: none;
+}
+
+/* סגנון למיכל הווידג'טים בתוך העמודה */
+.column-widgets-container {
+    min-height: 50px; /* גובה מינימלי בשביל גרירה */
+    width: 100%; /* רוחב מלא */
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem; /* מרווח בין ווידג'טים */
+} 

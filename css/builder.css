@@ -1,0 +1,22 @@
+/* css/builder.css */
+
+/* Responsive Controls Active State */
+#responsive-controls .responsive-button[data-active="true"] {
+    background-color: #3b82f6; /* Tailwind blue-500 */
+    color: white;
+}
+
+#responsive-controls .responsive-button[data-active="true"]:hover {
+    background-color: #2563eb; /* Tailwind blue-600 */
+}
+
+/* Styling for the modals (can be enhanced later) */
+#preview-modal,
+#templates-modal {
+    /* Basic modal styling is handled by Tailwind in header.php */
+    /* Add custom overrides or specific styles here if needed */
+}
+
+/* Styling for hidden elements based on breakpoint (if needed beyond simple display:none) */
+/* Example: You might need specific rules if using visibility instead of display */
+/*.hidden-desktop, .hidden-tablet, .hidden-mobile { ... }*/ 

@@ -115,28 +115,24 @@ export function getSettingOverrideStatus(elementData, settingPath) {
  * @param {object} elementData נתוני האלמנט המקוריים מה-state
  * @param {string[]} settingPath מערך המייצג את הנתיב להגדרה
  * @param {*} newValue הערך החדש לשמירה
- * @param {string} breakpoint נקודת השבירה שלגביה לשמור את הערך ('desktop', 'tablet', 'mobile')
  * @param {function} updateCallback הפונקציה מה-core לעדכון ה-state והרינדור
  */
-export function saveResponsiveSetting(elementData, settingPath, newValue, breakpoint, updateCallback) {
+export function saveResponsiveSetting(elementData, settingPath, newValue, updateCallback) {
     if (!elementData || !elementData.config) {
-        // console.error('saveResponsiveSetting: Missing elementData or config');
+        console.error('saveResponsiveSetting: Missing elementData or config');
         return;
     }
 
-    // console.log(`Saving setting [${settingPath.join('.')}] = ${JSON.stringify(newValue)} for explicit breakpoint: ${breakpoint}`);
+    // קבלת נקודת השבירה הנוכחית
+    const breakpoint = getCurrentBreakpoint();
 
+    // נרמול הנתיב - הסרת 'config' מההתחלה אם קיים
     let pathForOverride = [...settingPath];
-    if (pathForOverride.length > 0 && pathForOverride[0] === 'config') {
-        pathForOverride.shift(); 
-        // console.log(`   Adjusted override path (removed leading 'config'): ${pathForOverride.join('.')}`);
-    } else if (pathForOverride.length > 0 && pathForOverride[0] === 'styles') {
-        // console.log(`   Override path for styles remains: ${pathForOverride.join('.')}`);
-    } else {
-        // console.log(`   Override path remains: ${pathForOverride.join('.')}`);
+    if (pathForOverride[0] === 'config') {
+        pathForOverride.shift();
     }
 
-    // Ensure responsiveOverrides exists
+    // וידוא שקיים אובייקט responsiveOverrides
     if (!elementData.config.responsiveOverrides) {
         elementData.config.responsiveOverrides = {};
     }
@@ -144,87 +140,37 @@ export function saveResponsiveSetting(elementData, settingPath, newValue, breakp
         elementData.config.responsiveOverrides[breakpoint] = {};
     }
 
-    // --- שינוי: שימוש ב-settingPath המקורי להשוואה --- 
+    // קביעת ערך ההשוואה
     let comparisonValue;
     let comparisonSourceBreakpoint;
 
     if (breakpoint === 'desktop') {
-        // השווה מול הערך הבסיסי (שנמצא ב-elementData.config ישירות)
-        comparisonValue = getNestedValue(elementData.config, settingPath); // השתמש בנתיב המקורי
+        comparisonValue = getNestedValue(elementData.config, pathForOverride);
         comparisonSourceBreakpoint = 'base';
     } else {
-        // השווה מול הברייקפוינט הקודם
         comparisonSourceBreakpoint = (breakpoint === 'mobile') ? 'tablet' : 'desktop';
         const parentEffectiveConfig = getEffectiveConfig(elementData, comparisonSourceBreakpoint);
-        // חשוב: גם כאן, השתמש ב-settingPath המקורי כדי לקרוא את הערך מהקונפיג האפקטיבי
-        comparisonValue = getNestedValue(parentEffectiveConfig, settingPath); // השתמש בנתיב המקורי
+        comparisonValue = getNestedValue(parentEffectiveConfig, pathForOverride);
     }
-    // --------------------------------------------------
 
     const valuesAreEqual = JSON.stringify(newValue) === JSON.stringify(comparisonValue);
-    
-    // --- שינוי: שימוש ב-pathForOverride לשמירה/מחיקה ב-override --- 
-    const finalOverridePathInBreakpoint = [breakpoint, ...pathForOverride]; // Use adjusted path
+    const finalOverridePathInBreakpoint = [breakpoint, ...pathForOverride];
 
     if (!valuesAreEqual) {
-        setNestedValue(elementData.config.responsiveOverrides, finalOverridePathInBreakpoint, newValue);
-        // console.log(` -> Saved override at ${breakpoint}.${pathForOverride.join('.')} because value differs from ${comparisonSourceBreakpoint} (${JSON.stringify(comparisonValue)})`);
+        setNestedValue(elementData.config.responsiveOverrides, finalOverridePathInBreakpoint, deepClone(newValue));
     } else {
         deleteNestedValue(elementData.config.responsiveOverrides, finalOverridePathInBreakpoint);
-        // console.log(` -> Removed override at ${breakpoint}.${pathForOverride.join('.')} because value matches ${comparisonSourceBreakpoint} (${JSON.stringify(comparisonValue)})`);
     }
-    // ----------------------------------------------------------
 
-    // Cleanup empty override objects
-    // --- שינוי: בדיקה של האובייקט ב-override לפי pathForOverride --- 
-    // פונקצית עזר לבדיקת אובייקט ריק רקורסיבית (רק לניקוי)
-    const isEmptyRecursive = (obj) => {
-        if (typeof obj !== 'object' || obj === null) return false; // לא אובייקט
-        for (const key in obj) {
-            if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                if (typeof obj[key] === 'object' && obj[key] !== null) {
-                    if (!isEmptyRecursive(obj[key])) return false; // מצא משהו לא ריק בפנים
-                } else {
-                     return false; // מצא משהו לא אובייקט/לא ריק
-                }
-            }
-        }
-        return true; // הכל ריק
-    };
+    // ניקוי אובייקטים ריקים
+    cleanupEmptyObjects(elementData.config.responsiveOverrides, finalOverridePathInBreakpoint);
     
-    // פונקציית עזר למחיקה רקורסיבית של אובייקטים ריקים מהסוף
-    const cleanupEmptyObjects = (obj, path) => {
-        if (path.length === 0) return; // הגענו לשורש
-        
-        let current = obj;
-        for (let i = 0; i < path.length - 1; i++) {
-            if (current[path[i]] === undefined || typeof current[path[i]] !== 'object') {
-                return; // הנתיב לא קיים, אין מה לנקות
-            }
-            current = current[path[i]];
-        }
-
-        const finalKey = path[path.length - 1];
-        if (current[finalKey] !== undefined && typeof current[finalKey] === 'object' && isEmptyRecursive(current[finalKey])) {
-            // console.log(`   -> Cleaning up empty object at: ${path.join('.')}`);
-            delete current[finalKey];
-            cleanupEmptyObjects(obj, path.slice(0, -1)); 
-        }
-    };
-
-    // נקה את הנתיב המלא שנוצר אולי ב-override
-    cleanupEmptyObjects(elementData.config.responsiveOverrides, finalOverridePathInBreakpoint); 
-    
-    // נקה גם את אובייקט הברייקפוינט כולו אם הוא ריק
     if (elementData.config.responsiveOverrides[breakpoint] && isEmptyRecursive(elementData.config.responsiveOverrides[breakpoint])) {
-        // console.log(`   -> Cleaning up empty breakpoint object: ${breakpoint}`);
         delete elementData.config.responsiveOverrides[breakpoint];
     }
-    // -------------------------------------------------------------
 
-    // Call the update callback if provided, passing the updated data
+    // קריאה ל-updateCallback אם קיים
     if (typeof updateCallback === 'function') {
-        // console.log('[SaveResponsiveSetting] Calling updateCallback AFTER saving state (with updated elementData)');
         updateCallback(elementData);
     }
 }
@@ -340,4 +286,48 @@ function deepMerge(targetObject, sourceObject) {
     });
 
     return targetObject;
+}
+
+// --- פונקציות עזר לניקוי אובייקטים ריקים ---
+
+/**
+ * בודק אם אובייקט הוא ריק רקורסיבית
+ * @param {object} obj האובייקט לבדיקה
+ * @returns {boolean} האם האובייקט ריק
+ */
+function isEmptyRecursive(obj) {
+    if (typeof obj !== 'object' || obj === null) return false;
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            if (typeof obj[key] === 'object' && obj[key] !== null) {
+                if (!isEmptyRecursive(obj[key])) return false;
+            } else {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+/**
+ * מנקה אובייקטים ריקים מנתיב נתון
+ * @param {object} obj האובייקט לנקות
+ * @param {string[]} path הנתיב לנקות
+ */
+function cleanupEmptyObjects(obj, path) {
+    if (path.length === 0) return;
+    
+    let current = obj;
+    for (let i = 0; i < path.length - 1; i++) {
+        if (current[path[i]] === undefined || typeof current[path[i]] !== 'object') {
+            return;
+        }
+        current = current[path[i]];
+    }
+
+    const finalKey = path[path.length - 1];
+    if (current[finalKey] !== undefined && typeof current[finalKey] === 'object' && isEmptyRecursive(current[finalKey])) {
+        delete current[finalKey];
+        cleanupEmptyObjects(obj, path.slice(0, -1));
+    }
 }

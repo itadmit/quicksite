@@ -266,6 +266,40 @@ export function render(widgetData, effectiveConfig) {
     const config = effectiveConfig;
     const typo = config.styles?.typography || {};
     
+    // בדיקה אם האלמנט כבר קיים
+    const existingElement = document.querySelector(`[data-widget-id="${widgetData.id}"] .widget-content`);
+    if (existingElement) {
+        // עדכון כל המאפיינים של האלמנט הקיים
+        existingElement.textContent = config.content || '';
+        
+        // עדכון תג ה-HTML אם השתנה
+        if (existingElement.tagName.toLowerCase() !== (config.htmlTag || 'p')) {
+            const newElement = document.createElement(config.htmlTag || 'p');
+            newElement.className = existingElement.className;
+            newElement.textContent = existingElement.textContent;
+            existingElement.parentNode.replaceChild(newElement, existingElement);
+            return newElement;
+        }
+        
+        // עדכון קלאסים של טיפוגרפיה
+        existingElement.className = 'widget-content'; // קלאס בסיס
+        const typographyClasses = [
+            typo.fontSize,
+            typo.textAlign,
+        ].filter(Boolean);
+        existingElement.classList.add(...typographyClasses);
+        
+        // עדכון קלאסים של ה-wrapper
+        const wrapperClasses = [
+            'widget-wrapper',
+            'text-widget',
+            ...typographyClasses
+        ].filter(Boolean);
+        existingElement.dataset.widgetClasses = wrapperClasses.join(' ');
+        
+        return existingElement;
+    }
+    
     const tagName = config.htmlTag || 'p';
     const widgetContentElement = document.createElement(tagName);
     
@@ -274,11 +308,19 @@ export function render(widgetData, effectiveConfig) {
     const typographyClasses = [
         typo.fontSize,
         typo.textAlign,
-        // להוסיף כאן קלאסים נוספים מ-Tailwind אם רוצים (למשקל, עיטור וכו')
-    ].filter(Boolean); // סינון ערכים ריקים
+    ].filter(Boolean);
     widgetContentElement.classList.add(...typographyClasses);
 
     widgetContentElement.textContent = config.content || '';
+    
+    // הוספת קלאסים גם ל-wrapper
+    const wrapperClasses = [
+        'widget-wrapper',
+        'text-widget',
+        ...typographyClasses
+    ].filter(Boolean);
+    
+    widgetContentElement.dataset.widgetClasses = wrapperClasses.join(' ');
     
     return widgetContentElement;
 }
@@ -289,10 +331,16 @@ export function render(widgetData, effectiveConfig) {
  * @param {object} effectiveConfig הקונפיג האפקטיבי
  */
 export function applyStyles(widgetWrapper, effectiveConfig) {
-     const styles = effectiveConfig.styles || {};
-     const typo = styles.typography || {};
-     const margin = styles.margin || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
-     const padding = styles.padding || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
+    const styles = effectiveConfig.styles || {};
+    const typo = styles.typography || {};
+    const margin = styles.margin || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
+    const padding = styles.padding || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
+
+    // החלת קלאסים מה-dataset
+    const widgetContent = widgetWrapper.querySelector('.widget-content');
+    if (widgetContent && widgetContent.dataset.widgetClasses) {
+        widgetWrapper.className = widgetContent.dataset.widgetClasses;
+    }
 
     // החלת סגנונות inline עיקריים שלא דרך קלאסים
     widgetWrapper.style.color = styles.color || null;
@@ -318,10 +366,11 @@ export function applyStyles(widgetWrapper, effectiveConfig) {
     } else {
         widgetWrapper.style.display = 'none';
     }
-
-    // אולי נוסיף כאן עוד סגנונות inline אם נצטרך
-    // widgetWrapper.style.fontFamily = typo.fontFamily || null;
-    // widgetWrapper.style.fontWeight = typo.fontWeight || null;
+    
+    // עדכון הסגנונות של האלמנט עצמו
+    if (widgetContent) {
+        widgetContent.style.color = styles.color || null;
+    }
 }
 
 // הסרת ייצוא ישיר של populateContentTab
