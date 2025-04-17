@@ -405,9 +405,89 @@ if ($title) {
         const initialContent = <?php echo $content_json; ?>;
         const builderType = '<?php echo $type; ?>';
         const itemId = <?php echo $id; ?>;
+        window.itemSlug = <?php echo json_encode(isset($item["slug"]) ? $item["slug"] : "new-" . $type); ?>; // Use json_encode for safety
+        console.log('Item Slug set in index.php:', window.itemSlug); // Verify value on load
     </script>
 
     <!-- Load Core JS Module -->
     <script type="module" src="core.js"></script>
+
+    <!-- Media Library Modal -->
+    <div id="media-library-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center z-[999] hidden p-4">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden">
+            <!-- Header -->
+            <div class="flex items-center justify-between p-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-800">ספריית מדיה</h3>
+                <button id="media-library-close-btn" type="button" class="text-gray-400 hover:text-gray-600 focus:outline-none">
+                    <i class="ri-close-line text-2xl"></i>
+                </button>
+            </div>
+
+            <!-- Tabs & Content -->
+            <div class="flex flex-grow overflow-hidden">
+                <!-- Sidebar/Tabs -->
+                <div class="w-48 border-r border-gray-200 bg-gray-50 flex flex-col flex-shrink-0">
+                    <button data-tab="upload" class="media-tab-button p-3 text-sm text-right font-medium border-b border-gray-200 bg-white text-primary-600">
+                        <i class="ri-upload-cloud-line ml-2"></i>העלאת קבצים
+                    </button>
+                    <button data-tab="library" class="media-tab-button p-3 text-sm text-right font-medium text-gray-600 hover:bg-gray-100">
+                        <i class="ri-image-line ml-2"></i>ספריית מדיה
+                    </button>
+                    <!-- Add more tabs if needed -->
+                </div>
+
+                <!-- Tab Content -->
+                <div class="flex-grow p-4 overflow-y-auto bg-white">
+                    <!-- Upload Tab Content -->
+                    <div id="media-tab-content-upload" class="media-tab-content">
+                        <div id="media-upload-area" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-primary-400 bg-gray-50 mb-4">
+                            <input type="file" id="media-file-input" name="image_upload" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden">
+                            <i class="ri-upload-cloud-2-line text-4xl text-gray-400 mb-2"></i>
+                            <p class="text-gray-600">גרור קובץ לכאן או לחץ לבחירה</p>
+                            <p class="text-xs text-gray-400 mt-1">מקסימום 5MB. סוגים מותרים: JPG, PNG, GIF, WebP</p>
+                        </div>
+                        <div id="media-upload-preview-area" class="hidden">
+                            <p class="text-sm font-medium mb-2">תצוגה מקדימה:</p>
+                            <img id="media-upload-preview-img" src="" alt="Uploaded Image Preview" class="max-w-xs max-h-40 object-contain border border-gray-200 rounded">
+                            <p id="media-upload-url" class="text-xs text-gray-500 mt-1 break-all"></p>
+                        </div>
+                        <div id="media-upload-error" class="text-red-600 text-sm mt-2 hidden"></div>
+                        <div id="media-upload-progress" class="mt-2 hidden">
+                             <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                <div class="bg-primary-500 h-1.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Library Tab Content -->
+                    <div id="media-tab-content-library" class="media-tab-content hidden">
+                        <div id="media-library-loading" class="text-center p-8 text-gray-500 hidden">
+                            <i class="ri-loader-4-line text-2xl animate-spin"></i> טוען ספרייה...
+                        </div>
+                         <div id="media-library-error" class="text-red-600 text-sm hidden"></div>
+                        <div id="media-library-grid" class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-3">
+                            <!-- Images will be loaded here -->
+                        </div>
+                         <div id="media-library-empty" class="text-center p-8 text-gray-500 hidden">
+                            הספרייה ריקה.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="flex items-center justify-end p-3 border-t border-gray-200 bg-gray-50 gap-3">
+                <button id="media-library-cancel-btn" type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-gray-400">
+                    ביטול
+                </button>
+                <button id="media-library-insert-btn" type="button" class="px-4 py-2 text-sm font-medium text-white bg-primary-500 border border-transparent rounded-md shadow-sm hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    הכנס תמונה
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Media Library Script -->
+    <script type="module" src="media-library.js"></script>
 </body>
 </html>

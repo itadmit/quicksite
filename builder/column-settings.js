@@ -3,7 +3,7 @@
 
 import { 
     createSettingsGroup, 
-    createColorInput, 
+    createColorPicker,
     createLinkedInputs, 
     createTextInput,
     createNumberInput, 
@@ -233,8 +233,8 @@ export function populateColumnDesignTab(panel, elementData, effectiveConfig, upd
     bgColorLabel.className = 'block text-sm text-gray-600 mb-1';
     bgColorLabel.textContent = 'צבע רקע';
     bgContent.appendChild(bgColorLabel);
-    bgContent.appendChild(createColorInput(
-        config.styles?.backgroundColor || '#ffffff',
+    bgContent.appendChild(createColorPicker(
+        config.styles?.backgroundColor || 'transparent',
         (value) => { saveResponsiveSetting(elementData, ['styles', 'backgroundColor'], value, updateCallback); }
     ));
     panel.appendChild(bgAccordion);
@@ -273,7 +273,7 @@ export function populateColumnDesignTab(panel, elementData, effectiveConfig, upd
     borderColorLabel.className = 'block text-sm text-gray-600 mb-1';
     borderColorLabel.textContent = 'צבע';
     borderContent.appendChild(borderColorLabel);
-    borderContent.appendChild(createColorInput(
+    borderContent.appendChild(createColorPicker(
         config.styles?.border?.color || '#000000',
         (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'color'], value, updateCallback); }
     ));
@@ -411,7 +411,7 @@ export function populateColumnAdvancedTab(panel, elementData, effectiveConfig, u
         shadowColorLabel.className = 'block text-sm text-gray-600 mb-1';
         shadowColorLabel.textContent = 'צבע';
         shadowContent.appendChild(shadowColorLabel);
-        shadowContent.appendChild(createColorInput(
+        shadowContent.appendChild(createColorPicker(
             rgbaToHex(styles.boxShadow.color) || '#000000', 
             (value) => { styles.boxShadow.color = value; updateCallback(); },
             true // Allow opacity

@@ -46,6 +46,20 @@ export function createSettingsGroup(title, initiallyOpen = false) {
     return { accordionItem, contentDiv };
 }
 
+// --- הוספה: פונקציה ליצירת כותרת סעיף --- 
+/**
+ * Creates a simple section title element.
+ * @param {string} titleText The text for the title.
+ * @returns {HTMLElement} The title element (e.g., h3).
+ */
+export function createSectionTitle(titleText) {
+    const titleElement = document.createElement('h3');
+    titleElement.className = 'text-sm font-medium text-gray-800 mb-3 pt-2 border-t border-gray-200'; // Example styling
+    titleElement.textContent = titleText;
+    return titleElement;
+}
+// -----------------------------------------------
+
 // Helper function to create select dropdown with modern styling
 export function createSelect(options, selectedValue, changeCallback) {
     const select = document.createElement('select');
@@ -477,39 +491,45 @@ export function createSlider(label, value, min, max, step, changeCallback, displ
 }
 
 // Helper for creating a color input with modern styling
-export function createColorInput(value, changeCallback, hasOpacity = false) {
+export function createColorPicker(initialValue, changeCallback, options = {}) {
+    // const { hasOpacity = false } = options; // אפשר להוסיף בעתיד
     const container = document.createElement('div');
-    container.className = 'relative';
-    
-    const colorPreview = document.createElement('div');
-    colorPreview.className = 'w-full h-9 rounded-lg cursor-pointer flex items-center px-3 bg-gray-50';
-    colorPreview.style.borderRight = '30px solid ' + value;
-    
-    const colorText = document.createElement('span');
-    colorText.className = 'text-sm text-gray-700 uppercase';
-    colorText.textContent = value.replace('#', '');
-    colorPreview.appendChild(colorText);
-    
+    container.className = 'relative mb-2';
+
+    // יצירת תצוגה מקדימה של הצבע (דומה ל-createColorInput)
+    const previewWrapper = document.createElement('div');
+    previewWrapper.className = 'w-full h-9 rounded-lg cursor-pointer flex items-center px-3 bg-gray-50 border border-gray-200';
+
+    const colorPreviewBox = document.createElement('div');
+    colorPreviewBox.className = 'w-5 h-5 rounded-sm mr-2 shadow-inner';
+    colorPreviewBox.style.backgroundColor = initialValue;
+
+    const colorHexText = document.createElement('span');
+    colorHexText.className = 'text-xs text-gray-500 uppercase flex-grow text-left'; // יישור לשמאל
+    colorHexText.textContent = initialValue.startsWith('#') ? initialValue : rgbaToHex(initialValue);
+
+    previewWrapper.appendChild(colorPreviewBox);
+    previewWrapper.appendChild(colorHexText);
+
+    // יצירת בורר הצבעים המוסתר
     const colorInput = document.createElement('input');
     colorInput.type = 'color';
-    colorInput.className = 'absolute inset-0 opacity-0 cursor-pointer';
-    colorInput.value = value;
-    
+    colorInput.className = 'absolute inset-0 w-full h-full opacity-0 cursor-pointer';
+    colorInput.value = initialValue.startsWith('#') ? initialValue : rgbaToHex(initialValue);
+
     colorInput.addEventListener('input', (e) => {
         const newColor = e.target.value;
-        colorPreview.style.borderRight = '30px solid ' + newColor;
-        colorText.textContent = newColor.replace('#', '');
+        colorPreviewBox.style.backgroundColor = newColor;
+        colorHexText.textContent = newColor;
         changeCallback(newColor);
     });
-    
-    container.appendChild(colorPreview);
+
+    // הוספת אלמנטים לקונטיינר
+    container.appendChild(previewWrapper);
     container.appendChild(colorInput);
-    
-    // If opacity control needed, this is where we'd add it
-    if (hasOpacity) {
-        // Additional opacity slider could be added here
-    }
-    
+
+    // (נוכל להוסיף כאן לוגיקה של opacity אם נצטרך)
+
     return container;
 }
 
@@ -672,8 +692,8 @@ export function populateDesignTab(settingsPanel, widgetData, updateCallback) {
 
     // --- Text Color Section (Restored with helper) ---
     const { accordionItem: colorAccordion, contentDiv: colorContent } = createSettingsGroup('צבע טקסט');
-    // שימוש ב-createColorInput
-    colorContent.appendChild(createColorInput(styles.color || '#000000', (value) => {
+    // שימוש ב-createColorPicker
+    colorContent.appendChild(createColorPicker(styles.color || '#000000', (value) => {
         styles.color = value;
         updateCallback();
     }));
@@ -687,7 +707,7 @@ export function populateDesignTab(settingsPanel, widgetData, updateCallback) {
     bgColorLabel.className = 'block text-sm text-gray-600 mb-1';
     bgColorLabel.textContent = 'צבע רקע';
     commonStyleContent.appendChild(bgColorLabel);
-    commonStyleContent.appendChild(createColorInput(styles.backgroundColor || '#ffffff', (value) => {
+    commonStyleContent.appendChild(createColorPicker(styles.backgroundColor || '#ffffff', (value) => {
         styles.backgroundColor = value;
         updateCallback();
     }));
@@ -783,7 +803,7 @@ export function populateAdvancedTab(settingsPanel, widgetData, updateCallback) {
     const { accordionItem: borderAccordion, contentDiv: borderContent } = createSettingsGroup('מסגרת (Border)');
 
     // Color
-    borderContent.appendChild(createColorInput(styles.border.color || '#000000', (value) => {
+    borderContent.appendChild(createColorPicker(styles.border.color || '#000000', (value) => {
         styles.border.color = value;
         updateCallback();
     }));
@@ -864,7 +884,7 @@ export function populateAdvancedTab(settingsPanel, widgetData, updateCallback) {
     shadowContent.appendChild(shadowBlurSpreadRow);
     
     // Shadow Color
-    shadowContent.appendChild(createColorInput(
+    shadowContent.appendChild(createColorPicker(
         rgbaToHex(styles.boxShadow.color) || '#000000', 
         (value) => { styles.boxShadow.color = value; updateCallback(); },
         true // Allow opacity
@@ -980,6 +1000,60 @@ export function createVisibilityControls(initialVisibility, changeCallback) {
 
         container.appendChild(button);
     });
+
+    return container;
+}
+
+// --- NEW: Function to create checkbox ---
+
+/**
+ * Creates a styled checkbox input with a label.
+ * @param {string} labelText The text for the checkbox label.
+ * @param {boolean} isChecked Initial checked state.
+ * @param {function} changeCallback Function to call when the state changes. Receives the new boolean state.
+ * @returns {HTMLElement} The container div for the checkbox and label.
+ */
+export function createCheckbox(labelText, isChecked, changeCallback) {
+    const container = document.createElement('div');
+    container.className = 'flex items-center justify-between my-2'; // Use justify-between to push label and checkbox apart
+
+    const label = document.createElement('label');
+    label.className = 'text-sm text-gray-600 cursor-pointer';
+    label.textContent = labelText;
+
+    const checkboxWrapper = document.createElement('div');
+    checkboxWrapper.className = 'relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in'; // Tailwind toggle switch base
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer focus:outline-none';
+    checkbox.checked = isChecked;
+    checkbox.style.right = isChecked ? '0' : 'auto'; // Initial position based on state
+    checkbox.style.left = isChecked ? 'auto' : '0';
+    checkbox.style.borderColor = isChecked ? '#0ea5e9' : '#e5e7eb'; // primary-500 or gray-200
+
+    const toggleLabel = document.createElement('label'); // The background track
+    toggleLabel.className = 'toggle-label block overflow-hidden h-6 rounded-full cursor-pointer';
+    toggleLabel.style.backgroundColor = isChecked ? '#0ea5e9' : '#e5e7eb'; // primary-500 or gray-200
+
+    // Link label click to checkbox click
+    label.addEventListener('click', () => checkbox.click()); 
+    toggleLabel.addEventListener('click', () => checkbox.click());
+    
+    checkbox.addEventListener('change', (e) => {
+        const newState = e.target.checked;
+        checkbox.style.right = newState ? '0' : 'auto';
+        checkbox.style.left = newState ? 'auto' : '0';
+        checkbox.style.borderColor = newState ? '#0ea5e9' : '#e5e7eb';
+        toggleLabel.style.backgroundColor = newState ? '#0ea5e9' : '#e5e7eb';
+        changeCallback(newState);
+    });
+
+    checkboxWrapper.appendChild(checkbox);
+    checkboxWrapper.appendChild(toggleLabel);
+
+    container.appendChild(label); // Label on the left
+    container.appendChild(checkboxWrapper); // Toggle switch on the right
 
     return container;
 }

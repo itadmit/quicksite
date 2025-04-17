@@ -7,7 +7,7 @@ import {
     createTextInput,
     createSelect,
     createSettingsGroup,
-    createColorInput,      // <<< הוספה
+    createColorPicker,      // <<< שינוי ל-createColorPicker
     createButtonGroup,     // <<< הוספה
     createVisibilityControls, // <<< הוספה (בהנחה שקיים)
     createLinkedInputs // <<< החלפה
@@ -123,7 +123,7 @@ function _populateDesignTab(panel, elementData, effectiveConfig, updateCallback)
     // Font Color
     const colorContainer = document.createElement('div');
     colorContainer.className = 'mb-4';
-    colorContainer.appendChild(createColorInput(styles.color || '#000000',
+    colorContainer.appendChild(createColorPicker(styles.color || '#000000',
         (value) => { saveResponsiveSetting(elementData, ['styles', 'color'], value, updateCallback); }
     ));
     typographyContent.appendChild(colorContainer);

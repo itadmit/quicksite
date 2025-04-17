@@ -5,20 +5,23 @@
 import { 
     createSettingsGroup, 
     createLinkedInputs, 
-    createColorInput, 
     createSlider, 
     createSelect, 
     createNumberInput, 
     createTextInput,
     createButtonGroup,
     rgbaToHex,
-    createVisibilityControls
-    // createImageInput // Removed - Not exported from common-settings.js yet
-    // createCheckbox // Removed - Not exported from common-settings.js yet
+    createVisibilityControls,
+    createSectionTitle,
+    createColorPicker,
+    createCheckbox
 } from './common-settings.js';
 
 // --- הוספה: ייבוא פונקציית שמירה רספונסיבית ---
 import { saveResponsiveSetting, getSettingOverrideStatus, getEffectiveConfig, getNestedValue, getCurrentBreakpoint } from './render-responsive.js';
+// --- שינוי: ייבוא מהקובץ הנכון --- 
+import { applyStylesToElement } from './render.js'; // יובא מ-render.js
+import { openMediaLibrary } from './media-library.js'; // --- הוספה: ייבוא ספריית המדיה ---
 // ---------------------------------------------
 
 console.log('Row Settings module loaded');
@@ -178,47 +181,76 @@ export function populateRowDesignTab(panel, rowData, effectiveConfig, updateCall
     bgColorLabel.className = 'block text-sm text-gray-600 mb-1';
     bgColorLabel.textContent = 'צבע רקע';
     bgColorContainer.appendChild(bgColorLabel);
-    bgColorContainer.appendChild(createColorInput(styles.backgroundColor || '#ffffff', (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundColor'], value, updateCallback); }));
+    bgColorContainer.appendChild(createColorPicker(styles.backgroundColor || '#ffffff', (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundColor'], value, updateCallback); }));
     bgContent.appendChild(bgColorContainer);
 
-    // --- Background Image Upload ---
-    const bgImageContainer = document.createElement('div');
-    bgImageContainer.className = 'mb-4';
-    const bgImageLabel = document.createElement('label');
-    bgImageLabel.className = 'block text-sm text-gray-600 mb-1';
-    bgImageLabel.textContent = 'תמונת רקע';
-    bgImageContainer.appendChild(bgImageLabel);
+    // --- Background Image --- 
+    // --- שינוי שמות משתנים למניעת התנגשות ---
+    const { accordionItem: bgImageAccordion, contentDiv: bgImageContentDiv } = createSettingsGroup('תמונת רקע');
+    
+    // --- החלפת ההודעה הזמנית בפקד תמונת הרקע הנכון ---
+    const bgImageControl = document.createElement('div');
+    bgImageControl.className = 'mt-1'; // הקטנת מרווח עליון
 
-    // Temporarily commented out until createImageInput is implemented
-    /*
-    const { input: imageInput, controls: imageControls, removeButton: removeImageButton, settingsDiv: bgImageSettingsDiv } = createImageInput(
-        'תמונת רקע',
-        styles.backgroundImage,
-        (file) => { // On file selected
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                styles.backgroundImage = e.target.result;
-                removeImageButton.style.display = 'inline-block';
-                bgImageSettingsDiv.style.display = 'grid'; // Show settings
-                updateCallback();
-            }
-            reader.readAsDataURL(file);
-        },
-        () => { // On image removed
-            styles.backgroundImage = '';
-            removeImageButton.style.display = 'none';
-            bgImageSettingsDiv.style.display = 'none'; // Hide settings
-            updateCallback();
+    const label = document.createElement('label');
+    label.className = 'block text-sm text-gray-600 mb-1';
+    label.textContent = 'תמונת רקע';
+    bgImageControl.appendChild(label);
+
+    const currentImagePreview = document.createElement('img');
+    const currentImageUrl = effectiveConfig.styles?.backgroundImage || '';
+    currentImagePreview.src = currentImageUrl;
+    currentImagePreview.alt = 'תצוגה מקדימה';
+    currentImagePreview.className = `w-full h-24 object-cover rounded border border-gray-200 bg-gray-50 mb-2 ${currentImageUrl ? '' : 'hidden'}`; // Hide if no image
+    bgImageControl.appendChild(currentImagePreview);
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'flex gap-2';
+
+    const selectImageBtn = document.createElement('button');
+    selectImageBtn.type = 'button';
+    selectImageBtn.className = 'flex-1 px-3 py-1.5 text-sm text-white bg-primary-500 rounded hover:bg-primary-600 focus:outline-none';
+    selectImageBtn.textContent = currentImageUrl ? 'החלף תמונה' : 'בחר תמונה';
+    selectImageBtn.addEventListener('click', () => {
+        if (typeof openMediaLibrary === 'function') {
+            console.log('Accessing window.itemSlug in row-settings event listener:', window.itemSlug);
+            openMediaLibrary((selectedImageUrl) => {
+                console.log('Image selected from library:', selectedImageUrl);
+                saveResponsiveSetting(rowData, ['styles', 'backgroundImage'], selectedImageUrl, getCurrentBreakpoint(), updateCallback);
+                currentImagePreview.src = selectedImageUrl;
+                currentImagePreview.classList.remove('hidden');
+                selectImageBtn.textContent = 'החלף תמונה';
+                removeImageBtn.classList.remove('hidden'); 
+            }, window.itemSlug);
+        } else {
+            console.error('openMediaLibrary function is not defined!');
+            alert('שגיאה: פונקציית ספריית המדיה לא נמצאה.');
         }
-    );
-    bgImageContainer.appendChild(imageInput);
-    bgImageContainer.appendChild(imageControls);
-    bgImageContainer.appendChild(bgImageSettingsDiv);
-    bgContent.appendChild(bgImageContainer);
+    });
+    buttonContainer.appendChild(selectImageBtn);
 
-    // --- Image Settings (Position, Repeat, Size, Attachment) ---
+    const removeImageBtn = document.createElement('button');
+    removeImageBtn.type = 'button';
+    removeImageBtn.className = `px-3 py-1.5 text-sm text-gray-600 bg-gray-100 rounded hover:bg-gray-200 focus:outline-none ${currentImageUrl ? '' : 'hidden'}`; 
+    removeImageBtn.innerHTML = '<i class="ri-delete-bin-line"></i>';
+    removeImageBtn.title = 'הסר תמונה';
+    removeImageBtn.addEventListener('click', () => {
+         saveResponsiveSetting(rowData, ['styles', 'backgroundImage'], '', getCurrentBreakpoint(), updateCallback);
+         currentImagePreview.src = '';
+         currentImagePreview.classList.add('hidden');
+         selectImageBtn.textContent = 'בחר תמונה';
+         removeImageBtn.classList.add('hidden');
+    });
+    buttonContainer.appendChild(removeImageBtn);
+    
+    bgImageControl.appendChild(buttonContainer);
+    bgImageContentDiv.appendChild(bgImageControl);
+
+    // --- הוספה מחדש: הגדרות תמונת רקע (מיקום, חזרה, גודל, היצמדות) ---
+    const bgImageSettingsDiv = document.createElement('div');
     bgImageSettingsDiv.className = 'mt-3 grid grid-cols-2 gap-3 border-t border-gray-200 pt-3';
-    bgImageSettingsDiv.style.display = styles.backgroundImage ? 'grid' : 'none'; // Show only if image exists
+    // הצג רק אם יש תמונה
+    bgImageSettingsDiv.style.display = currentImageUrl ? 'grid' : 'none'; 
 
     // Position
     const posContainer = document.createElement('div');
@@ -230,8 +262,9 @@ export function populateRowDesignTab(panel, rowData, effectiveConfig, updateCall
             { value: 'left center', label: 'שמאל מרכז' }, { value: 'center center', label: 'מרכז מרכז' }, { value: 'right center', label: 'ימין מרכז' },
             { value: 'left bottom', label: 'שמאל למטה' }, { value: 'center bottom', label: 'מרכז למטה' }, { value: 'right bottom', label: 'ימין למטה' }
         ],
-        styles.backgroundPosition,
-        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundPosition'], value, updateCallback); }
+        // --- שימוש ב-effectiveConfig לקריאת ערך התחלתי --- 
+        effectiveConfig.styles?.backgroundPosition || 'center center',
+        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundPosition'], value, getCurrentBreakpoint(), updateCallback); }
     ));
     bgImageSettingsDiv.appendChild(posContainer);
 
@@ -241,8 +274,8 @@ export function populateRowDesignTab(panel, rowData, effectiveConfig, updateCall
     attachContainer.appendChild(attachLabel);
     attachContainer.appendChild(createSelect(
         [{ value: 'scroll', label: 'רגיל' }, { value: 'fixed', label: 'קבוע (Parallax)' }],
-        styles.backgroundAttachment,
-        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundAttachment'], value, updateCallback); }
+        effectiveConfig.styles?.backgroundAttachment || 'scroll',
+        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundAttachment'], value, getCurrentBreakpoint(), updateCallback); }
     ));
     bgImageSettingsDiv.appendChild(attachContainer);
 
@@ -252,8 +285,8 @@ export function populateRowDesignTab(panel, rowData, effectiveConfig, updateCall
     repeatContainer.appendChild(repeatLabel);
     repeatContainer.appendChild(createSelect(
         [{ value: 'no-repeat', label: 'ללא חזרה' }, { value: 'repeat', label: 'חזור על הכל' }, { value: 'repeat-x', label: 'חזור אופקית' }, { value: 'repeat-y', label: 'חזור אנכית' }],
-        styles.backgroundRepeat,
-        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundRepeat'], value, updateCallback); }
+        effectiveConfig.styles?.backgroundRepeat || 'no-repeat',
+        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundRepeat'], value, getCurrentBreakpoint(), updateCallback); }
     ));
     bgImageSettingsDiv.appendChild(repeatContainer);
 
@@ -263,21 +296,16 @@ export function populateRowDesignTab(panel, rowData, effectiveConfig, updateCall
     sizeContainer.appendChild(sizeLabel);
     sizeContainer.appendChild(createSelect(
         [{ value: 'cover', label: 'כיסוי' }, { value: 'contain', label: 'הכלה' }, { value: 'auto', label: 'אוטומטי' }],
-        styles.backgroundSize,
-        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundSize'], value, updateCallback); }
+        effectiveConfig.styles?.backgroundSize || 'cover',
+        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundSize'], value, getCurrentBreakpoint(), updateCallback); }
     ));
     bgImageSettingsDiv.appendChild(sizeContainer);
     
-    bgContent.appendChild(bgImageSettingsDiv);
-    */
-    // Add a placeholder message instead
-    const imagePlaceholder = document.createElement('p');
-    imagePlaceholder.textContent = '(העלאת תמונת רקע תתווסף בקרוב)';
-    imagePlaceholder.className = 'text-xs text-gray-400 italic mt-1';
-    bgImageContainer.appendChild(imagePlaceholder);
-    bgContent.appendChild(bgImageContainer);
+    // הוסף את קונטיינר ההגדרות לקונטיינר של תמונת הרקע
+    bgImageContentDiv.appendChild(bgImageSettingsDiv);
+    // ---------------------------------------------------------------
 
-    panel.appendChild(bgAccordion);
+    panel.appendChild(bgImageAccordion);
 
     // --- Background Overlay ---
     const { accordionItem: overlayAccordion, contentDiv: overlayContent } = createSettingsGroup('שכבת רקע');
@@ -292,11 +320,11 @@ export function populateRowDesignTab(panel, rowData, effectiveConfig, updateCall
     overlayColorLabel.className = 'block text-sm text-gray-600 mb-1';
     overlayColorLabel.textContent = 'צבע שכבה';
     overlayColorContainer.appendChild(overlayColorLabel);
-    overlayColorContainer.appendChild(createColorInput(styles.backgroundOverlay.color, (value) => {
+    overlayColorContainer.appendChild(createColorPicker(styles.backgroundOverlay.color || 'rgba(0,0,0,0.5)', (value) => {
         styles.backgroundOverlay.color = value;
         styles.backgroundOverlay.type = 'classic'; // Set type to classic when color changes
         updateCallback();
-    }, true)); // Allow opacity via RGBA in color picker for now
+    }, true)); // Allow opacity via RGBA in color picker for now - Note: createColorPicker needs to handle this if required
     overlayContent.appendChild(overlayColorContainer);
 
     // Reset button
