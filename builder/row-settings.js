@@ -11,20 +11,25 @@ import {
     createNumberInput, 
     createTextInput,
     createButtonGroup,
-    rgbaToHex
+    rgbaToHex,
+    createVisibilityControls
     // createImageInput // Removed - Not exported from common-settings.js yet
     // createCheckbox // Removed - Not exported from common-settings.js yet
 } from './common-settings.js';
+
+// --- הוספה: ייבוא פונקציית שמירה רספונסיבית ---
+import { saveResponsiveSetting, getSettingOverrideStatus, getEffectiveConfig, getNestedValue, getCurrentBreakpoint } from './render-responsive.js';
+// ---------------------------------------------
 
 console.log('Row Settings module loaded');
 
 // --- פונקציות לייצוא ---
 
-export function populateRowContentTab(panel, rowData, updateCallback) {
+export function populateRowContentTab(panel, rowData, effectiveConfig, updateCallback) {
     console.log("Populating row content tab for:", rowData.id);
     panel.innerHTML = ''; // ניקוי
     if (!rowData.config) rowData.config = {};
-    const config = rowData.config;
+    const config = effectiveConfig;
     
     // אתחול ברירות מחדל לערכים חדשים
     if (config.contentWidth === undefined) config.contentWidth = 'boxed';
@@ -33,6 +38,11 @@ export function populateRowContentTab(panel, rowData, updateCallback) {
     if (!config.minHeight) config.minHeight = { value: 100, unit: 'px' };
     if (config.verticalAlign === undefined) config.verticalAlign = 'top';
     if (!config.htmlTag) config.htmlTag = 'div';
+
+    // Initialize responsiveOverrides if it doesn't exist on the original data
+    if (!rowData.config.responsiveOverrides) {
+        rowData.config.responsiveOverrides = {};
+    }
 
     // --- Structure Group ---
     const { accordionItem: structureAccordion, contentDiv: structureContent } = createSettingsGroup('מבנה', true);
@@ -50,7 +60,7 @@ export function populateRowContentTab(panel, rowData, updateCallback) {
             { value: 'fullWidth', title: 'רוחב מלא', label: 'רוחב מלא' }
         ],
         config.contentWidth,
-        (value) => { config.contentWidth = value; updateCallback(); }
+        (value) => { saveResponsiveSetting(rowData, ['contentWidth'], value, updateCallback); }
     ));
     structureContent.appendChild(widthContainer);
     
@@ -61,10 +71,7 @@ export function populateRowContentTab(panel, rowData, updateCallback) {
     gapLabel.className = 'block text-sm text-gray-600 mb-1';
     gapLabel.textContent = 'רווח בין עמודות';
     gapContainer.appendChild(gapLabel);
-    gapContainer.appendChild(createNumberInput(null, config.columnGap, (value) => {
-        config.columnGap = parseInt(value) || 0;
-        updateCallback();
-    }, 0, 100, 1));
+    gapContainer.appendChild(createNumberInput(null, config.columnGap, (value) => { saveResponsiveSetting(rowData, ['columnGap'], parseInt(value) || 0, updateCallback); }, 0, 100, 1));
     structureContent.appendChild(gapContainer);
     
     // Height
@@ -81,16 +88,19 @@ export function populateRowContentTab(panel, rowData, updateCallback) {
             { value: 'minHeight', label: 'גובה מינימלי' }
         ],
         config.heightMode,
-        (value) => { config.heightMode = value; updateCallback(); minHeightInputDiv.style.display = (value === 'minHeight' ? 'block' : 'none'); }
+        (value) => { 
+            saveResponsiveSetting(rowData, ['heightMode'], value, updateCallback);
+            minHeightInputDiv.style.display = (value === 'minHeight' ? 'block' : 'none');
+        }
     ));
     const minHeightInputDiv = document.createElement('div');
     minHeightInputDiv.className = 'mt-2 grid grid-cols-2 gap-2';
     minHeightInputDiv.style.display = (config.heightMode === 'minHeight' ? 'block' : 'none');
-    minHeightInputDiv.appendChild(createNumberInput(null, config.minHeight.value, (value) => { config.minHeight.value = parseInt(value) || 0; updateCallback(); }, 0));
+    minHeightInputDiv.appendChild(createNumberInput(null, config.minHeight.value, (value) => { saveResponsiveSetting(rowData, ['minHeight', 'value'], parseInt(value) || 0, updateCallback); }, 0));
     minHeightInputDiv.appendChild(createSelect([
         { value: 'px', label: 'px' },
         { value: 'vh', label: 'vh' }
-    ], config.minHeight.unit, (value) => { config.minHeight.unit = value; updateCallback(); }));
+    ], config.minHeight.unit, (value) => { saveResponsiveSetting(rowData, ['minHeight', 'unit'], value, updateCallback); }));
     heightContainer.appendChild(minHeightInputDiv);
     structureContent.appendChild(heightContainer);
 
@@ -108,7 +118,7 @@ export function populateRowContentTab(panel, rowData, updateCallback) {
             { value: 'bottom', title: 'למטה', icon: '<i class="ri-align-bottom"></i>' }
         ],
         config.verticalAlign,
-        (value) => { config.verticalAlign = value; updateCallback(); }
+        (value) => { saveResponsiveSetting(rowData, ['verticalAlign'], value, updateCallback); }
     ));
     structureContent.appendChild(vAlignContainer);
 
@@ -131,20 +141,20 @@ export function populateRowContentTab(panel, rowData, updateCallback) {
             { value: 'nav', label: 'nav' }
         ],
         config.htmlTag,
-        (value) => { config.htmlTag = value; updateCallback(); }
+        (value) => { saveResponsiveSetting(rowData, ['htmlTag'], value, updateCallback); }
     ));
     structureContent.appendChild(tagContainer);
 
     panel.appendChild(structureAccordion);
 }
 
-export function populateRowDesignTab(panel, rowData, updateCallback) {
+export function populateRowDesignTab(panel, rowData, effectiveConfig, updateCallback) {
     console.log("Populating row design tab for:", rowData.id);
     panel.innerHTML = ''; // ניקוי
     if (!rowData.config) rowData.config = {};
     if (!rowData.config.styles) rowData.config.styles = {};
     const styles = rowData.config.styles;
-    const config = rowData.config; // For custom ID/Class maybe
+    const config = effectiveConfig;
 
     // אתחול ערכים חדשים
     if (!styles.backgroundOverlay) styles.backgroundOverlay = { type: 'none', color: 'rgba(0,0,0,0.5)' };
@@ -152,6 +162,11 @@ export function populateRowDesignTab(panel, rowData, updateCallback) {
     if (!styles.backgroundAttachment) styles.backgroundAttachment = 'scroll';
     if (!styles.backgroundRepeat) styles.backgroundRepeat = 'no-repeat';
     if (!styles.backgroundSize) styles.backgroundSize = 'cover';
+
+    // Initialize responsiveOverrides if it doesn't exist on the original data
+    if (!rowData.config.responsiveOverrides) {
+        rowData.config.responsiveOverrides = {};
+    }
 
     // --- רקע כללי --- 
     const { accordionItem: bgAccordion, contentDiv: bgContent } = createSettingsGroup('רקע כללי', true);
@@ -163,10 +178,7 @@ export function populateRowDesignTab(panel, rowData, updateCallback) {
     bgColorLabel.className = 'block text-sm text-gray-600 mb-1';
     bgColorLabel.textContent = 'צבע רקע';
     bgColorContainer.appendChild(bgColorLabel);
-    bgColorContainer.appendChild(createColorInput(styles.backgroundColor || '#ffffff', (value) => {
-        styles.backgroundColor = value;
-        updateCallback();
-    }));
+    bgColorContainer.appendChild(createColorInput(styles.backgroundColor || '#ffffff', (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundColor'], value, updateCallback); }));
     bgContent.appendChild(bgColorContainer);
 
     // --- Background Image Upload ---
@@ -219,7 +231,7 @@ export function populateRowDesignTab(panel, rowData, updateCallback) {
             { value: 'left bottom', label: 'שמאל למטה' }, { value: 'center bottom', label: 'מרכז למטה' }, { value: 'right bottom', label: 'ימין למטה' }
         ],
         styles.backgroundPosition,
-        (value) => { styles.backgroundPosition = value; updateCallback(); }
+        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundPosition'], value, updateCallback); }
     ));
     bgImageSettingsDiv.appendChild(posContainer);
 
@@ -230,7 +242,7 @@ export function populateRowDesignTab(panel, rowData, updateCallback) {
     attachContainer.appendChild(createSelect(
         [{ value: 'scroll', label: 'רגיל' }, { value: 'fixed', label: 'קבוע (Parallax)' }],
         styles.backgroundAttachment,
-        (value) => { styles.backgroundAttachment = value; updateCallback(); }
+        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundAttachment'], value, updateCallback); }
     ));
     bgImageSettingsDiv.appendChild(attachContainer);
 
@@ -241,7 +253,7 @@ export function populateRowDesignTab(panel, rowData, updateCallback) {
     repeatContainer.appendChild(createSelect(
         [{ value: 'no-repeat', label: 'ללא חזרה' }, { value: 'repeat', label: 'חזור על הכל' }, { value: 'repeat-x', label: 'חזור אופקית' }, { value: 'repeat-y', label: 'חזור אנכית' }],
         styles.backgroundRepeat,
-        (value) => { styles.backgroundRepeat = value; updateCallback(); }
+        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundRepeat'], value, updateCallback); }
     ));
     bgImageSettingsDiv.appendChild(repeatContainer);
 
@@ -252,7 +264,7 @@ export function populateRowDesignTab(panel, rowData, updateCallback) {
     sizeContainer.appendChild(createSelect(
         [{ value: 'cover', label: 'כיסוי' }, { value: 'contain', label: 'הכלה' }, { value: 'auto', label: 'אוטומטי' }],
         styles.backgroundSize,
-        (value) => { styles.backgroundSize = value; updateCallback(); }
+        (value) => { saveResponsiveSetting(rowData, ['styles', 'backgroundSize'], value, updateCallback); }
     ));
     bgImageSettingsDiv.appendChild(sizeContainer);
     
@@ -306,112 +318,140 @@ export function populateRowDesignTab(panel, rowData, updateCallback) {
     // TODO: Add Shape Divider Section
 }
 
-export function populateRowAdvancedTab(panel, rowData, updateCallback) {
-    console.log("Populating row advanced tab for:", rowData.id);
-    panel.innerHTML = ''; // ניקוי
-    if (!rowData.config) rowData.config = {};
-    if (!rowData.config.styles) rowData.config.styles = {};
-    const styles = rowData.config.styles;
-    const config = rowData.config;
-    
-    // אתחול ערכי ברירת מחדל אם לא קיימים
-    if (!styles.padding) styles.padding = { top: '', right: '', bottom: '', left: '', linked: true };
-    if (!styles.margin) styles.margin = { top: '0', bottom: '0' }; // שוליים רק למעלה/למטה
-    if (!styles.border) styles.border = { width: '0', style: 'none', color: '#000000' };
-    if (!styles.boxShadow) styles.boxShadow = { type: 'none', x: '0', y: '0', blur: '0', spread: '0', color: 'rgba(0,0,0,0.1)'};
-    if (config.customId === undefined) config.customId = '';
-    if (config.customClass === undefined) config.customClass = '';
-    
-    // --- Padding Section ---
-    const { accordionItem: paddingAccordion, contentDiv: paddingContent } = createSettingsGroup('ריפוד (Padding)');
-    const paddingLabels = [
-        { key: 'top', label: 'עליון', placeholder: '0' },
-        { key: 'right', label: 'ימין', placeholder: '0' },
-        { key: 'bottom', label: 'תחתון', placeholder: '0' },
-        { key: 'left', label: 'שמאל', placeholder: '0' },
-    ];
-    paddingContent.appendChild(createLinkedInputs(paddingLabels, styles.padding, 'px', true, updateCallback));
-    panel.appendChild(paddingAccordion);
+export function populateRowAdvancedTab(panel, rowData, effectiveConfig, updateCallback) {
+    console.log('Populating row advanced tab for:', rowData.id);
+    panel.innerHTML = ''; // Clear previous
 
-    // --- Margin Section ---
+    if (!rowData || !rowData.config) {
+        settingsPanel.innerHTML = '<p class="text-gray-500 text-sm p-4">בחר אלמנט לעריכה.</p>';
+        return; // Exit if no valid element data
+    }
+
+    // --- שינוי: קבלת styles מהקונפיג המקורי של השורה ---
+    const styles = rowData.config.styles || {};
+    // --- שינוי: שימוש ב-effectiveConfig עבור ערכים שאינם נערכים כאן ישירות ---
+    const config = effectiveConfig;
+    // ----------------------------------------------------
+
+    // Ensure styles structure exists on original data
+    if (!rowData.config.styles) rowData.config.styles = {};
+    // --- שינוי: אתחול padding/border/boxShadow על styles (האובייקט המקורי) ---
+    if (!styles.padding) {
+        styles.padding = { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
+    } else if (styles.padding.unit === undefined) {
+        styles.padding.unit = 'px'; // ודא שיחידה קיימת
+    }
+    // --- שינוי: ברירת מחדל ל-margin ---
+    if (!styles.margin) {
+        styles.margin = { top: '0', right: 'auto', bottom: '0', left: 'auto', unit: 'px' }; // Usually only top/bottom margin for rows
+    } else if (styles.margin.unit === undefined) {
+        styles.margin.unit = 'px'; 
+    }
+    // -------------------------------
+    if (!styles.border) styles.border = { width: '0', style: 'solid', color: '#000000' };
+    if (!styles.boxShadow) styles.boxShadow = { type: 'none', x: '0', y: '0', blur: '0', spread: '0', color: 'rgba(0,0,0,0.1)'};
+    // -----------------------------------------------------------------------
+    // --- שינוי: אתחול visibility על הקונפיג המקורי ---
+    if (!rowData.config.visibility) rowData.config.visibility = { desktop: true, tablet: true, mobile: true };
+    // -----------------------------------------------
+
+    // --- פונקציית עזר לטעינת ערך אפקטיבי לברייקפוינט ספציפי --- 
+    const fetchSettingValue = (breakpoint, path) => {
+        // קבל את הקונפיג האפקטיבי המלא לאותו ברייקפוינט
+        const specificEffectiveConfig = getEffectiveConfig(rowData, breakpoint);
+        // קרא את הערך הספציפי מהקונפיג האפקטיבי
+        return getNestedValue(specificEffectiveConfig, path);
+    };
+    // -------------------------------------------------------------
+
+    // --- Margin Section (Responsive) ---
     const { accordionItem: marginAccordion, contentDiv: marginContent } = createSettingsGroup('שוליים (Margin)');
-    const marginTopContainer = document.createElement('div');
-    marginTopContainer.className = 'mb-3';
-    marginTopContainer.appendChild(createNumberInput('Margin Top (px)', parseInt(styles.margin.top) || 0, (value) => { styles.margin.top = parseInt(value) || 0; updateCallback(); }, 0));
-    marginContent.appendChild(marginTopContainer);
-    
-    const marginBottomContainer = document.createElement('div');
-    marginBottomContainer.className = 'mb-3';
-    marginBottomContainer.appendChild(createNumberInput('Margin Bottom (px)', parseInt(styles.margin.bottom) || 0, (value) => { styles.margin.bottom = parseInt(value) || 0; updateCallback(); }, 0));
-    marginContent.appendChild(marginBottomContainer);
+    marginContent.appendChild(createLinkedInputs(
+        'שוליים',
+        rowData,
+        ['styles', 'margin'],
+        ['px', '%', 'em', 'rem', 'auto'],
+        'px',
+        updateCallback
+    ));
     panel.appendChild(marginAccordion);
 
-    // --- Border Section ---
-    const { accordionItem: borderAccordion, contentDiv: borderContent } = createSettingsGroup('מסגרת (Border)');
-    borderContent.appendChild(createColorInput(styles.border.color, (value) => { styles.border.color = value; updateCallback(); }));
-    const borderControlsRow = document.createElement('div');
-    borderControlsRow.className = 'grid grid-cols-2 gap-2 mt-3';
-    const widthWithLabel = document.createElement('div'); widthWithLabel.className = 'flex flex-col';
-    const widthLabel = document.createElement('span'); widthLabel.className = 'text-xs text-gray-500 mb-1'; widthLabel.textContent = 'עובי';
-    widthWithLabel.appendChild(widthLabel);
-    widthWithLabel.appendChild(createNumberInput(null, parseInt(styles.border.width) || 0, (value) => { styles.border.width = parseInt(value) || 0; updateCallback(); }, 0, 50, 1));
-    const styleWithLabel = document.createElement('div'); styleWithLabel.className = 'flex flex-col';
-    const styleLabel = document.createElement('span'); styleLabel.className = 'text-xs text-gray-500 mb-1'; styleLabel.textContent = 'סגנון';
-    styleWithLabel.appendChild(styleLabel);
-    styleWithLabel.appendChild(createSelect(
-        [{value: 'solid', label:'רציף'}, {value: 'dashed', label:'מקווקו'}, {value: 'dotted', label:'נקודות'}, {value: 'none', label: 'ללא'}],
-        styles.border.style, (value) => { styles.border.style = value; updateCallback(); }
+    // --- Padding Section (Accordion - Responsive) ---
+    const { accordionItem: paddingAccordion, contentDiv: paddingContent } = createSettingsGroup('ריפוד (Padding)', true);
+    paddingContent.appendChild(createLinkedInputs(
+        'ריפוד',
+        rowData,
+        ['styles', 'padding'],
+        ['px', '%', 'em', 'rem', 'vh', 'vw'],
+        'px',
+        updateCallback
     ));
-    borderControlsRow.appendChild(widthWithLabel);
-    borderControlsRow.appendChild(styleWithLabel);
-    borderContent.appendChild(borderControlsRow);
-    panel.appendChild(borderAccordion);
+    panel.appendChild(paddingAccordion);
+    
+    // --- Visibility Section (Responsive) --- 
+    const { accordionItem: visibilityAccordion, contentDiv: visibilityContent } = createSettingsGroup('נראות (Visibility)');
+    const currentVisibility = rowData.config.visibility || { desktop: true, tablet: true, mobile: true };
+    if (typeof createVisibilityControls === 'function') {
+        visibilityContent.appendChild(
+            createVisibilityControls(currentVisibility, (newVisibility) => {
+                const currentBreakpoint = window.currentBreakpoint || 'desktop';
+                saveResponsiveSetting(rowData, ['visibility', currentBreakpoint], newVisibility[currentBreakpoint], updateCallback);
+            })
+        );
+    } else {
+        visibilityContent.textContent = 'Error: createVisibilityControls not found';
+        console.error('createVisibilityControls not found in common-settings.js');
+    }
+    panel.appendChild(visibilityAccordion);
 
-    // --- Shadow Section ---
-    const { accordionItem: shadowAccordion, contentDiv: shadowContent } = createSettingsGroup('צל (Shadow)');
-    const shadowTypeRow = document.createElement('div'); shadowTypeRow.className = 'mb-3';
-    const shadowTypeLabel = document.createElement('span'); shadowTypeLabel.className = 'text-xs text-gray-500 mb-1 block'; shadowTypeLabel.textContent = 'סוג צל';
-    shadowTypeRow.appendChild(shadowTypeLabel);
-    shadowTypeRow.appendChild(createSelect(
-        [{value: 'none', label: 'ללא'}, {value: 'drop-shadow', label: 'Drop Shadow'}],
-        styles.boxShadow.type, (value) => { styles.boxShadow.type = value; updateCallback(); }
-    ));
-    shadowContent.appendChild(shadowTypeRow);
-    const shadowXYRow = document.createElement('div'); shadowXYRow.className = 'grid grid-cols-2 gap-2 mb-3';
-    shadowXYRow.appendChild(createNumberInput('X', parseInt(styles.boxShadow.x) || 0, (value) => { styles.boxShadow.x = parseInt(value) || 0; updateCallback(); }));
-    shadowXYRow.appendChild(createNumberInput('Y', parseInt(styles.boxShadow.y) || 0, (value) => { styles.boxShadow.y = parseInt(value) || 0; updateCallback(); }));
-    shadowContent.appendChild(shadowXYRow);
-    const shadowBlurSpreadRow = document.createElement('div'); shadowBlurSpreadRow.className = 'grid grid-cols-2 gap-2 mb-3';
-    shadowBlurSpreadRow.appendChild(createNumberInput('Blur', parseInt(styles.boxShadow.blur) || 0, (value) => { styles.boxShadow.blur = parseInt(value) || 0; updateCallback(); }, 0));
-    shadowBlurSpreadRow.appendChild(createNumberInput('Spread', parseInt(styles.boxShadow.spread) || 0, (value) => { styles.boxShadow.spread = parseInt(value) || 0; updateCallback(); }));
-    shadowContent.appendChild(shadowBlurSpreadRow);
-    shadowContent.appendChild(createColorInput(
-        styles.boxShadow.color, (value) => { styles.boxShadow.color = value; updateCallback(); }, true
-    ));
-    panel.appendChild(shadowAccordion);
-
-    // --- Custom Identifiers Section ---
+    // --- Custom Identifiers Section (Accordion - Not Responsive) ---
     const { accordionItem: idClassAccordion, contentDiv: idClassContent } = createSettingsGroup('מזהים וקלאסים');
-    const idContainer = document.createElement('div'); idContainer.className = 'mb-3';
-    const idLabel = document.createElement('label'); idLabel.className = 'block text-sm text-gray-600 mb-1'; idLabel.htmlFor = `row-custom-id-${rowData.id}`; idLabel.textContent = 'Custom ID';
-    const idInput = document.createElement('input'); idInput.type = 'text'; idInput.id = `row-custom-id-${rowData.id}`; idInput.className = 'w-full h-9 px-3 text-sm rounded-lg focus:outline-none bg-gray-50 text-gray-700'; idInput.placeholder = 'my-unique-row-id'; idInput.value = config.customId;
+    const customId = rowData.config.customId || '';
+    const customClass = rowData.config.customClass || '';
+
+    // Custom ID Input
+    const idContainer = document.createElement('div');
+    idContainer.className = 'mb-3';
+    const idLabel = document.createElement('label');
+    idLabel.className = 'block text-sm text-gray-600 mb-1';
+    idLabel.htmlFor = `custom-id-${rowData.id}`;
+    idLabel.textContent = 'Custom ID';
+    const idInput = document.createElement('input');
+    idInput.type = 'text';
+    idInput.id = `custom-id-${rowData.id}`;
+    idInput.className = 'w-full h-9 px-3 text-sm rounded-lg focus:outline-none bg-gray-50 text-gray-700';
+    idInput.placeholder = 'my-unique-row-id';
+    idInput.value = customId;
     idInput.addEventListener('input', (e) => {
         e.target.value = e.target.value.replace(/[^a-zA-Z0-9-_]/g, '');
-        config.customId = e.target.value;
-        // לא צריך callback כאן כי ID לא משפיע על הרינדור ישירות
+        rowData.config.customId = e.target.value;
+        updateCallback(false);
     });
-    idContainer.appendChild(idLabel); idContainer.appendChild(idInput); idClassContent.appendChild(idContainer);
-    
-    const classContainer = document.createElement('div'); classContainer.className = 'mb-3';
-    const classLabel = document.createElement('label'); classLabel.className = 'block text-sm text-gray-600 mb-1'; classLabel.htmlFor = `row-custom-class-${rowData.id}`; classLabel.textContent = 'Custom CSS Classes';
-    const classInput = document.createElement('input'); classInput.type = 'text'; classInput.id = `row-custom-class-${rowData.id}`; classInput.className = 'w-full h-9 px-3 text-sm rounded-lg focus:outline-none bg-gray-50 text-gray-700'; classInput.placeholder = 'my-row-class another-class'; classInput.value = config.customClass;
+    idContainer.appendChild(idLabel);
+    idContainer.appendChild(idInput);
+    idClassContent.appendChild(idContainer);
+
+    // Custom Class Input
+    const classContainer = document.createElement('div');
+    classContainer.className = 'mb-3';
+    const classLabel = document.createElement('label');
+    classLabel.className = 'block text-sm text-gray-600 mb-1';
+    classLabel.htmlFor = `custom-class-${rowData.id}`;
+    classLabel.textContent = 'Custom CSS Classes';
+    const classInput = document.createElement('input');
+    classInput.type = 'text';
+    classInput.id = `custom-class-${rowData.id}`;
+    classInput.className = 'w-full h-9 px-3 text-sm rounded-lg focus:outline-none bg-gray-50 text-gray-700';
+    classInput.placeholder = 'my-row-class another-class';
+    classInput.value = customClass;
     classInput.addEventListener('input', (e) => {
         e.target.value = e.target.value.replace(/[^a-zA-Z0-9-_\s]/g, '');
-        config.customClass = e.target.value.trim();
-        updateCallback(); // צריך רינדור מחדש להחלת הקלאסים
+        rowData.config.customClass = e.target.value.trim();
+        updateCallback(true);
     });
-    classContainer.appendChild(classLabel); classContainer.appendChild(classInput); idClassContent.appendChild(classContainer);
+    classContainer.appendChild(classLabel);
+    classContainer.appendChild(classInput);
+    idClassContent.appendChild(classContainer);
+
     panel.appendChild(idClassAccordion);
-    
-    // TODO: Implement Visibility settings
 } 

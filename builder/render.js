@@ -1,6 +1,8 @@
 // Render module
 import * as TextWidget from './widgets/text.js';
 // Import other widget modules as needed
+// הוספה: ייבוא פונקציות רספונסיביות
+import { getEffectiveConfig, getCurrentBreakpoint } from './render-responsive.js';
 
 console.log('Render module loaded');
 
@@ -52,20 +54,29 @@ export function renderPageContent(pageState, containerElement) {
 
     // Render each row
     pageState.forEach(row => {
-        const rowElement = renderRow(row);
+        // --- שינוי: שימוש בקונפיג האפקטיבי ---
+        const currentBreakpoint = getCurrentBreakpoint();
+        const effectiveConfig = getEffectiveConfig(row, currentBreakpoint);
+        // בדיקה אם השורה צריכה להיות מוסתרת ב-breakpoint זה
+        if (effectiveConfig.visibility && effectiveConfig.visibility[currentBreakpoint] === false) {
+            return; // אל תרנדר את השורה
+        }
+        // -------------------------------------
+        const rowElement = renderRow(row, effectiveConfig); // העברת הקונפיג האפקטיבי
         containerElement.appendChild(rowElement);
     });
 }
 
 // Function to render a single row
-function renderRow(rowData) {
-    // ודא שקיימים אובייקטי הקונפיגורציה והסטייל
-    const config = rowData.config || {};
+// --- שינוי: קבלת effectiveConfig כפרמטר --- 
+function renderRow(rowData, effectiveConfig) {
+    // const config = rowData.config || {}; // לא נשתמש ישירות
+    const config = effectiveConfig; // שימוש בקונפיג האפקטיבי
     const styles = config.styles || {};
 
-    // שינוי: קביעת תגית ה-HTML
-    const rowElement = document.createElement(config.htmlTag || 'div'); 
-    rowElement.className = 'row-wrapper relative mb-5 rounded-lg'; // הוספת relative עבור overlay
+    // שינוי: קביעת תגית ה-HTML מהקונפיג האפקטיבי
+    const rowElement = document.createElement(config.htmlTag || 'div');
+    rowElement.className = 'row-wrapper relative mb-5 rounded-lg';
     rowElement.dataset.rowId = rowData.id;
     rowElement.dataset.elementId = rowData.id; // For selection
 
@@ -78,45 +89,15 @@ function renderRow(rowData) {
     }
 
     // --- החלת סגנונות רקע, גובה ו-inline --- 
-    Object.assign(rowElement.style, {
-        position: 'relative', // Ensure relative positioning for overlay
-        backgroundColor: styles.backgroundColor || 'transparent',
-        paddingTop: styles.padding?.top ? `${parseInt(styles.padding.top)}px` : null,
-        paddingRight: styles.padding?.right ? `${parseInt(styles.padding.right)}px` : null,
-        paddingBottom: styles.padding?.bottom ? `${parseInt(styles.padding.bottom)}px` : null,
-        paddingLeft: styles.padding?.left ? `${parseInt(styles.padding.left)}px` : null,
-        marginTop: styles.margin?.top ? `${parseInt(styles.margin.top)}px` : null,
-        marginBottom: styles.margin?.bottom ? `${parseInt(styles.margin.bottom)}px` : null,
-        borderWidth: styles.border?.width ? `${parseInt(styles.border.width)}px` : null,
-        borderStyle: styles.border?.style || 'none',
-        borderColor: styles.border?.color || 'transparent',
-        backgroundImage: styles.backgroundImage ? `url('${styles.backgroundImage}')` : null,
-        backgroundPosition: styles.backgroundPosition || null,
-        backgroundRepeat: styles.backgroundRepeat || null,
-        backgroundSize: styles.backgroundSize || null,
-        backgroundAttachment: styles.backgroundAttachment || null,
-        minHeight: (config.heightMode === 'minHeight' && config.minHeight) ? `${parseInt(config.minHeight.value)}${config.minHeight.unit}` : null,
-    });
-
-    // החלת Box Shadow
-    if (styles.boxShadow && styles.boxShadow.type !== 'none') {
-        rowElement.style.boxShadow = `${parseInt(styles.boxShadow.x)}px ${parseInt(styles.boxShadow.y)}px ${parseInt(styles.boxShadow.blur)}px ${parseInt(styles.boxShadow.spread)}px ${styles.boxShadow.color || 'rgba(0,0,0,0.1)'}`;
-    } else {
-        rowElement.style.boxShadow = 'none'; // Ensure removal if set to none
-    }
+    // שינוי: במקום להחיל כאן, נקרא ל-applyStylesToElement בסוף
+    // Object.assign(rowElement.style, { ... }); // הסרת החלת סטיילים ישירה כאן
 
     // --- הוספת שכבת רקע (אם נבחרה) ---
     if (styles.backgroundOverlay && styles.backgroundOverlay.type !== 'none') {
         const overlayElement = document.createElement('div');
         overlayElement.className = 'row-background-overlay';
-        Object.assign(overlayElement.style, {
-            position: 'absolute',
-            inset: '0',
-            backgroundColor: styles.backgroundOverlay.color || 'rgba(0,0,0,0.5)',
-            zIndex: '0', // מאחורי התוכן
-            pointerEvents: 'none', // לא יפריע ללחיצות
-        });
-        rowElement.appendChild(overlayElement); // הוספה ראשונה כדי להיות מאחור
+        // ... (קוד שכבת רקע נשאר זהה, אבל יוחל ע"י applyStylesToElement)
+        rowElement.appendChild(overlayElement); 
     }
     
     // --- Row header/controls (מוזז אחרי ה-overlay) ---
@@ -174,72 +155,77 @@ function renderRow(rowData) {
     });
 
     // --- Row content container --- 
-    // שינוי: יצירת קונטיינר פנימי עבור מצב Boxed
-    let contentTargetContainer = rowElement; // ברירת מחדל: הוסף עמודות ישירות ל-rowElement
+    let contentTargetContainer = rowElement;
+    // --- שינוי: שימוש ב-config (האפקטיבי) --- 
     if (config.contentWidth === 'boxed') {
         const innerContainer = document.createElement('div');
-        innerContainer.className = 'boxed-content-container relative z-10 max-w-6xl mx-auto w-full px-4'; // התאמה אישית של max-width ו-px
+        innerContainer.className = 'boxed-content-container relative z-10 max-w-6xl mx-auto w-full px-4'; 
         rowElement.appendChild(innerContainer);
-        contentTargetContainer = innerContainer; // הכנס את העמודות לתוך הקונטיינר הפנימי
+        contentTargetContainer = innerContainer;
     }
     
     const columnsContainer = document.createElement('div');
-    // שינוי: הסרת flex-wrap
+    // --- שינוי: שימוש ב-config (האפקטיבי) ---
     columnsContainer.className = 'columns-container relative z-10 flex py-2'; 
     if (config.contentWidth !== 'boxed') { columnsContainer.classList.add('px-2'); }
-    switch (config.verticalAlign) { 
-        case 'top': columnsContainer.style.alignItems = 'flex-start'; break;
-        case 'middle': columnsContainer.style.alignItems = 'center'; break;
-        case 'bottom': columnsContainer.style.alignItems = 'flex-end'; break;
-        default: columnsContainer.style.alignItems = 'flex-start'; 
+    // --- שינוי: הוספת טיפול בהיפוך עמודות במובייל --- 
+    if (config.reverseColumnOrderOnMobile === true && getCurrentBreakpoint() === 'mobile') {
+        columnsContainer.classList.add('flex-col-reverse'); // או flex-wrap-reverse תלוי בבסיס
+    } else {
+        // ודא שהקלאס מוסר אם לא רלוונטי
+        columnsContainer.classList.remove('flex-col-reverse');
     }
-    if (config.columnGap !== undefined) { columnsContainer.style.gap = `${parseInt(config.columnGap) || 0}px`; }
+    // -----------------------------------------------
+    // --- שינוי: העברת הגדרות align ו-gap ל-applyStylesToElement ---
+    // switch (config.verticalAlign) { ... } // יועבר
+    // if (config.columnGap !== undefined) { ... } // יועבר
     
     // Render each column
     if (rowData.columns && rowData.columns.length > 0) {
         const totalColumns = rowData.columns.length;
         rowData.columns.forEach((column, index) => {
-            const columnElement = renderColumn(column, totalColumns, index);
+            // --- שינוי: שימוש בקונפיג האפקטיבי של העמודה ---
+            const currentBreakpoint = getCurrentBreakpoint();
+            const effectiveColumnConfig = getEffectiveConfig(column, currentBreakpoint);
+            // בדיקה אם העמודה צריכה להיות מוסתרת
+            if (effectiveColumnConfig.visibility && effectiveColumnConfig.visibility[currentBreakpoint] === false) {
+                return; // אל תרנדר עמודה זו
+            }
+            // -------------------------------------------------
+            const columnElement = renderColumn(column, totalColumns, index, effectiveColumnConfig); // העברת הקונפיג האפקטיבי
             columnsContainer.appendChild(columnElement);
         });
     }
     
-    contentTargetContainer.appendChild(columnsContainer); // הוספה לקונטיינר המתאים
+    contentTargetContainer.appendChild(columnsContainer); 
+    
+    // --- שינוי: החלת סגנונות כולל רספונסיביים בסוף --- 
+    applyStylesToElement(rowElement, rowData);
+    // -------------------------------------------------
     
     return rowElement;
 }
 
 // Function to render a single column
-function renderColumn(columnData, totalColumnsInRow, columnIndex) {
-    // הדפסת הנתונים המתקבלים
-    console.log('Rendering column with data:', columnData, 'Index:', columnIndex);
+// --- שינוי: קבלת effectiveConfig כפרמטר --- 
+function renderColumn(columnData, totalColumnsInRow, columnIndex, effectiveConfig) {
+    console.log('Rendering column with data:', columnData, 'Index:', columnIndex, 'Effective Config:', effectiveConfig); // הדפסה מורחבת
 
-    // ודא קיום config ו-styles
-    const config = columnData?.config || {};
-    const styles = config?.styles || {};
+    // const config = columnData?.config || {}; // לא בשימוש ישיר
+    // const styles = config?.styles || {}; // לא בשימוש ישיר
+    const config = effectiveConfig; // שימוש בקונפיג האפקטיבי
+    const styles = config.styles || {};
 
-    // שימוש בתגית HTML מהקונפיגורציה
     const columnWrapper = document.createElement(config.htmlTag || 'div');
-    if (!(columnWrapper instanceof Node)) { // בדיקה מוקדמת מאוד
-        console.error('Failed to create columnWrapper element!', { config });
-        return document.createElement('div'); // Return dummy element
-    }
     columnWrapper.className = `column-wrapper group relative ${columnData?.widgets?.length === 0 ? 'is-empty' : ''} rounded-lg`; 
     columnWrapper.dataset.columnId = columnData.id;
     columnWrapper.dataset.elementId = columnData.id; // For selection
-    // Apply ID and Class
+    
     if (config.customId) columnWrapper.id = config.customId;
     if (config.customClass) columnWrapper.classList.add(...config.customClass.split(' ').filter(Boolean));
-    // Apply styles
-    Object.assign(columnWrapper.style, {
-        backgroundColor: styles.backgroundColor || 'transparent',
-        width: config.widthPercent ? `${config.widthPercent}%` : '100%', 
-        flexBasis: config.widthPercent ? `${config.widthPercent}%` : '100%', 
-        flexGrow: '0',
-        flexShrink: '0',
-    });
-    // הוספת לוג לבדיקת הרוחב המוחל
-    console.log(`Applying width/basis to col ${columnData.id}: ${columnWrapper.style.width} / ${columnWrapper.style.flexBasis} (from config: ${config.widthPercent}%)`);
+
+    // --- שינוי: הסרת החלת סטיילים ישירה --- 
+    // Object.assign(columnWrapper.style, { ... }); // מוסר, יוחל ע"י applyStylesToElement
 
     // --- Column Controls (Kebab Menu & Toolbar) ---
     const controlsContainer = document.createElement('div');
@@ -253,7 +239,7 @@ function renderColumn(columnData, totalColumnsInRow, columnIndex) {
     kebabButton.title = 'אפשרויות עמודה';
     controlsContainer.appendChild(kebabButton); // הוספת כפתור הקבב ראשון
 
-    // Toolbar (מוסתר)
+    // Toolbar (מוסתר בהתחלה)
     const toolbar = document.createElement('div');
     // שינוי: הגדלת z-index ל-z-40
     toolbar.className = 'column-toolbar absolute top-full left-0 mt-1 p-1 bg-white rounded-md shadow-lg border border-gray-100 flex flex-col gap-1 hidden z-40 w-max'; 
@@ -363,9 +349,9 @@ function renderColumn(columnData, totalColumnsInRow, columnIndex) {
     const widgetsContainer = document.createElement('div');
     widgetsContainer.className = 'column-widgets-container min-h-[50px] flex flex-col pb-2'; 
     Object.assign(widgetsContainer.style, {
-        paddingTop: styles.padding?.top ? `${parseInt(styles.padding.top)}px` : null,
-        paddingRight: styles.padding?.right ? `${parseInt(styles.padding.right)}px` : null,
-        paddingLeft: styles.padding?.left ? `${parseInt(styles.padding.left)}px` : null,
+        paddingTop: styles.padding?.top || null,
+        paddingRight: styles.padding?.right || null,
+        paddingLeft: styles.padding?.left || null,
         gap: (config.widgetSpacing !== undefined) ? `${parseInt(config.widgetSpacing)}px` : null 
     });
 
@@ -373,20 +359,23 @@ function renderColumn(columnData, totalColumnsInRow, columnIndex) {
     if (Array.isArray(columnData?.widgets)) {
         if (columnData.widgets.length > 0) {
             columnData.widgets.forEach(widget => {
-                // בדיקה אם widget הוא אובייקט תקין לפני הרינדור
-                if (widget && typeof widget === 'object') {
-                    const widgetElement = renderWidget(widget);
-                    if (widgetElement instanceof Node) {
-                        widgetsContainer.appendChild(widgetElement);
-                    } else {
-                        console.error('RenderWidget did not return a valid Node for:', widget);
-                        const errorElement = document.createElement('div');
-                        errorElement.className = 'p-2 text-red-500 border border-red-300 rounded bg-red-50 text-xs';
-                        errorElement.textContent = 'שגיאה ברינדור ווידג\'ט';
-                        widgetsContainer.appendChild(errorElement);
-                    }
+                // --- שינוי: שימוש בקונפיג האפקטיבי של הווידג'ט ---
+                const currentBreakpoint = getCurrentBreakpoint();
+                const effectiveWidgetConfig = getEffectiveConfig(widget, currentBreakpoint);
+                 // בדיקה אם הווידג'ט צריך להיות מוסתר
+                if (effectiveWidgetConfig.visibility && effectiveWidgetConfig.visibility[currentBreakpoint] === false) {
+                    return; // אל תרנדר ווידג'ט זה
+                }
+                // -------------------------------------------------
+                const widgetElement = renderWidget(widget, effectiveWidgetConfig); // העברת הקונפיג האפקטיבי
+                if (widgetElement instanceof Node) {
+                    widgetsContainer.appendChild(widgetElement);
                 } else {
-                     console.error('Invalid widget data found in column:', widget);
+                    console.error('RenderWidget did not return a valid Node for:', widget);
+                    const errorElement = document.createElement('div');
+                    errorElement.className = 'p-2 text-red-500 border border-red-300 rounded bg-red-50 text-xs';
+                    errorElement.textContent = 'שגיאה ברינדור ווידג\'ט';
+                    widgetsContainer.appendChild(errorElement);
                 }
             });
         } 
@@ -408,43 +397,65 @@ function renderColumn(columnData, totalColumnsInRow, columnIndex) {
         columnWrapper.appendChild(widgetsContainer);
     }
 
+    // --- שינוי: החלת סגנונות כולל רספונסיביים בסוף --- 
+    applyStylesToElement(columnWrapper, columnData);
+    // -------------------------------------------------
+
     return columnWrapper;
 }
 
-// Function to render a widget
-function renderWidget(widgetData) {
+// Function to render a single widget
+// --- שינוי: קבלת effectiveConfig כפרמטר --- 
+function renderWidget(widgetData, effectiveConfig) {
+    // const config = widgetData.config || {}; // לא בשימוש ישיר
+    const config = effectiveConfig;
+
     const widgetWrapper = document.createElement('div');
-    widgetWrapper.className = 'widget-wrapper relative mb-2 w-full';
-    
-    let widgetElement = null;
-    
-    // Handle different widget types
-    switch(widgetData.type) {
-        case 'text':
-            widgetElement = TextWidget.renderWidget(widgetData);
-            break;
-        // Add other widget types here
-        default:
-            // Generic/unsupported widget renderer
-            widgetElement = document.createElement('div');
-            widgetElement.className = 'widget p-3 bg-gray-100 text-center text-gray-500 rounded';
-            widgetElement.textContent = `וידג'ט לא נתמך: ${widgetData.type}`;
+    widgetWrapper.className = 'widget-wrapper relative mb-4'; // מרווח ברירת מחדל
+    widgetWrapper.dataset.widgetId = widgetData.id;
+    widgetWrapper.dataset.elementId = widgetData.id; // For selection
+    widgetWrapper.dataset.widgetType = widgetData.type;
+
+    // Apply custom ID and Class if present in effectiveConfig
+    if (config.customId) widgetWrapper.id = config.customId;
+    if (config.customClass) widgetWrapper.classList.add(...config.customClass.split(' ').filter(Boolean));
+
+    let widgetContentElement = null;
+    const widgetModule = getWidgetModule(widgetData.type);
+
+    if (widgetModule && typeof widgetModule.render === 'function') {
+        // --- שינוי: העברת הקונפיג האפקטיבי לפונקציית הרינדור של הווידג'ט --- 
+        widgetContentElement = widgetModule.render(widgetData, config); 
+    } else if (widgetModule && typeof widgetModule.renderWidget === 'function') {
+        console.log(`Using renderWidget for ${widgetData.type}`);
+        // *** שינוי: קריאה ל-renderWidget והעברת הקונפיג האפקטיבי ***
+        widgetContentElement = widgetModule.renderWidget(widgetData, config); 
+    } else {
+        widgetContentElement = document.createElement('div');
+        widgetContentElement.className = 'widget-placeholder p-4 bg-red-100 border border-red-300 text-red-700 rounded';
+        widgetContentElement.textContent = `Widget type '${widgetData.type}' cannot be rendered (no render or renderWidget function found).`; // הודעה משופרת
+        console.error('Missing render/renderWidget function for widget type:', widgetData.type);
     }
-    
-    if (widgetElement) {
-        widgetElement.dataset.widgetId = widgetData.id; // Enable selection by id
-        widgetElement.dataset.elementId = widgetData.id; // For general selection
-        widgetElement.dataset.widgetType = widgetData.type; // Store type
-        
-        // Apply common widget styles from widgetData.config if they exist
-        applyWidgetStyles(widgetElement, widgetData);
-        
-        widgetWrapper.appendChild(widgetElement);
-        
-        // הוספת כפתורי פעולה לווידג'ט - שיפור העיצוב
-        addWidgetControls(widgetWrapper, widgetData);
+
+    if (widgetContentElement) {
+        widgetWrapper.appendChild(widgetContentElement);
     }
+
+    // --- שינוי: החלת סגנונות כולל רספונסיביים בסוף --- 
+    applyStylesToElement(widgetWrapper, widgetData);
+    // -------------------------------------------------
     
+    // Add controls (edit, duplicate, delete)
+    addWidgetControls(widgetWrapper, widgetData);
+
+    // Add event listener for selection
+    widgetWrapper.addEventListener('click', (e) => {
+        // Prevent selection if clicking on a control button
+        if (!e.target.closest('.widget-toolbar-button')) {
+            selectElement('widget', widgetData.id);
+        }
+    });
+
     return widgetWrapper;
 }
 
@@ -677,128 +688,129 @@ export function applyStylesToElement(element, elementData) {
         return;
     }
 
-    const config = elementData.config;
+    const elementType = elementData.config ? (elementData.columns ? 'row' : (elementData.widgets ? 'column' : 'widget')) : 'unknown';
+    console.log(`Applying styles to ${elementType}: ${elementData.id}`);
+
+    // --- קבלת הקונפיג האפקטיבי --- 
+    const currentBreakpoint = getCurrentBreakpoint();
+    const config = getEffectiveConfig(elementData, currentBreakpoint);
     const styles = config.styles || {};
-    const typo = styles.typography || {};
-    const border = styles.border || {};
-    const boxShadow = styles.boxShadow || {};
-    const padding = styles.padding || {};
+    // --------------------------------
 
-    // --- Reset Inline Styles (to avoid conflicts with potentially removed styles) ---
-    element.style.padding = '';
-    element.style.opacity = '';
-    element.style.border = '';
-    element.style.boxShadow = '';
-    element.style.color = '';
-    element.style.backgroundColor = '';
-    element.style.fontFamily = '';
-    element.style.fontWeight = '';
-    element.style.fontSize = '';
-    element.style.lineHeight = '';
-    element.style.letterSpacing = '';
-    // Note: text-align is handled by classes
-    // --- הוספה: איפוס ספציפי לרוחב ו-flex-basis ---
-    element.style.width = '';
-    element.style.flexBasis = '';
-    element.style.flexGrow = ''; // Usually 0 for fixed columns
-    element.style.flexShrink = ''; // Usually 0 for fixed columns
-    // -------------------------------------------
-
-    // --- Apply General Styles ---
-    // --- הוספה: החלת רוחב ו-flex-basis --- 
-    if (elementData.type === 'column' && config.widthPercent) {
-        const widthVal = `${config.widthPercent}%`;
-        element.style.width = widthVal;
-        element.style.flexBasis = widthVal;
-        element.style.flexGrow = '0'; // Ensure it doesn't grow
-        element.style.flexShrink = '0'; // Ensure it doesn't shrink
-        console.log(`[applyStyles] Applied width/basis ${widthVal} to ${elementData.id}`);
+    // --- טיפול בנראות (Visibility) --- 
+    element.classList.remove('hidden-desktop', 'hidden-tablet', 'hidden-mobile'); // איפוס תחילה
+    if (config.visibility) {
+        if (config.visibility.desktop === false) element.classList.add('hidden-desktop');
+        if (config.visibility.tablet === false) element.classList.add('hidden-tablet');
+        if (config.visibility.mobile === false) element.classList.add('hidden-mobile');
     }
-    // ---------------------------------------
-    // Padding
-    if (padding.top) element.style.paddingTop = padding.top + 'px';
-    if (padding.right) element.style.paddingRight = padding.right + 'px';
-    if (padding.bottom) element.style.paddingBottom = padding.bottom + 'px';
-    if (padding.left) element.style.paddingLeft = padding.left + 'px';
+    // ---------------------------------
+    
+    // --- איפוס סגנונות inline לפני החלה מחדש (חשוב למניעת התנגשויות) ---
+    element.style.cssText = ''; // דרך קלה לאפס הכל
+    // ----------------------------------------------------------------------
 
-    // Opacity
-    if (styles.opacity !== undefined && styles.opacity !== null) {
-        element.style.opacity = styles.opacity;
-    }
+    // --- החלת סגנונות כלליים (לכל סוגי האלמנטים) ---
+    Object.assign(element.style, {
+        backgroundColor: styles.backgroundColor || 'transparent',
+        paddingTop: styles.padding?.top || null,
+        paddingRight: styles.padding?.right || null,
+        paddingBottom: styles.padding?.bottom || null,
+        paddingLeft: styles.padding?.left || null,
+        marginTop: styles.margin?.top || null,
+        marginRight: styles.margin?.right || null,
+        marginBottom: styles.margin?.bottom || null,
+        marginLeft: styles.margin?.left || null,
+        borderWidth: styles.border?.width ? `${parseInt(styles.border.width)}px` : null,
+        borderStyle: styles.border?.style || 'none',
+        borderColor: styles.border?.color || 'transparent',
+        borderRadius: styles.borderRadius?.value ? `${parseInt(styles.borderRadius.value)}${styles.borderRadius.unit || 'px'}` : null,
+        // ... עוד סגנונות משותפים?
+    });
 
-    // Border
-    if (border.style && border.style !== 'none' && parseInt(border.width) > 0) {
-        element.style.borderWidth = `${border.width}px`;
-        element.style.borderStyle = border.style;
-        element.style.borderColor = border.color || '#000000';
-    } else {
-        element.style.border = 'none'; // Ensure border is removed if set to none/0 width
-    }
-
-    // Shadow
-    if (boxShadow.type && boxShadow.type !== 'none') {
-        element.style.boxShadow = `${boxShadow.x || '0px'} ${boxShadow.y || '0px'} ${boxShadow.blur || '0px'} ${boxShadow.spread || '0px'} ${boxShadow.color || 'rgba(0,0,0,0.1)'}`;
+    // Box Shadow
+    if (styles.boxShadow && styles.boxShadow.type !== 'none') {
+        element.style.boxShadow = `${parseInt(styles.boxShadow.x)}px ${parseInt(styles.boxShadow.y)}px ${parseInt(styles.boxShadow.blur)}px ${parseInt(styles.boxShadow.spread)}px ${styles.boxShadow.color || 'rgba(0,0,0,0.1)'}`;
     } else {
         element.style.boxShadow = 'none';
     }
     
-    // Background Color
-    if (styles.backgroundColor) {
-         element.style.backgroundColor = styles.backgroundColor;
-    }
+    // --- החלת סגנונות ספציפיים לסוג האלמנט ---
+    if (elementType === 'row') {
+        Object.assign(element.style, {
+            backgroundImage: styles.backgroundImage ? `url('${styles.backgroundImage}')` : null,
+            backgroundPosition: styles.backgroundPosition || null,
+            backgroundRepeat: styles.backgroundRepeat || null,
+            backgroundSize: styles.backgroundSize || null,
+            backgroundAttachment: styles.backgroundAttachment || null,
+            minHeight: (config.heightMode === 'minHeight' && config.minHeight) ? `${parseInt(config.minHeight.value)}${config.minHeight.unit}` : null,
+        });
+        // סגנונות הקונטיינר הפנימי של העמודות
+        const columnsContainer = element.querySelector('.columns-container');
+        if (columnsContainer) {
+            Object.assign(columnsContainer.style, {
+                alignItems: config.verticalAlign ? (config.verticalAlign === 'middle' ? 'center' : `flex-${config.verticalAlign}`) : 'flex-start',
+                gap: config.columnGap !== undefined ? `${parseInt(config.columnGap) || 0}px` : null,
+            });
+            // טיפול בהיפוך עמודות
+            if (config.reverseColumnOrderOnMobile === true && currentBreakpoint === 'mobile') {
+                columnsContainer.classList.add('flex-col-reverse'); // או סגנון אחר מתאים
+            } else {
+                columnsContainer.classList.remove('flex-col-reverse');
+            }
+        }
+         // סגנונות שכבת רקע (Overlay)
+        const overlay = element.querySelector('.row-background-overlay');
+        if (overlay && styles.backgroundOverlay && styles.backgroundOverlay.type !== 'none') {
+            Object.assign(overlay.style, {
+                backgroundColor: styles.backgroundOverlay.color || 'rgba(0,0,0,0.5)',
+                // אולי נוסיף עוד הגדרות ל-overlay בעתיד
+            });
+        } else if (overlay) {
+            overlay.style.backgroundColor = 'transparent'; // הסר אם לא פעיל
+        }
 
-    // --- Apply Text-Specific Styles (If it's a text widget - check type?) ---
-    // Corrected check: Access type directly from elementData for widgets
-    if (elementData.type === 'widget' && elementData.config.type === 'text') { 
-        // Color
-        if (styles.color) {
-            element.style.color = styles.color;
+    } else if (elementType === 'column') {
+        Object.assign(element.style, {
+            width: config.widthPercent ? `${config.widthPercent}%` : '100%', 
+            flexBasis: config.widthPercent ? `${config.widthPercent}%` : '100%', 
+            flexGrow: '0',
+            flexShrink: '0',
+        });
+        // סגנונות הקונטיינר של הווידג'טים
+        const widgetsContainer = element.querySelector('.column-widgets-container');
+        if (widgetsContainer) {
+            Object.assign(widgetsContainer.style, {
+                display: 'flex', // להשתמש ב-flex כאן
+                flexDirection: 'column', // ווידג'טים אחד מתחת לשני
+                justifyContent: config.verticalAlign || 'flex-start', // יישור אנכי של הווידג'טים
+                alignItems: config.horizontalAlign || 'stretch', // יישור אופקי של הווידג'טים
+                gap: config.widgetSpacing !== undefined ? `${parseInt(config.widgetSpacing) || 0}px` : null, // מרווח בין ווידג'טים
+            });
         }
-        // Typography
-        if (typo.fontFamily) {
-            element.style.fontFamily = typo.fontFamily;
-        }
-        if (typo.fontWeight) {
-            element.style.fontWeight = typo.fontWeight;
-        }
-        if (typo.fontSize && typo.fontSize.endsWith('px')) { // Check if pixel value exists
-            element.style.fontSize = typo.fontSize;
+
+    } else if (elementType === 'widget') {
+        // --- שינוי: העברת החלת סטיילים של ווידג'ט לכאן --- 
+        const widgetModule = getWidgetModule(elementData.type);
+        if (widgetModule && typeof widgetModule.applyStyles === 'function') {
+            widgetModule.applyStyles(element, config); // העברת הקונפיג האפקטיבי
         } else {
-             element.style.fontSize = ''; // Remove inline pixel size if not set
-        }
-        if (typo.lineHeight) {
-            element.style.lineHeight = typo.lineHeight;
-        }
-        if (typo.letterSpacing) {
-            element.style.letterSpacing = typo.letterSpacing;
-        }
-
-        // Text Alignment (using classes)
-        const alignClasses = ['text-left', 'text-center', 'text-right', 'text-justify'];
-        element.classList.remove(...alignClasses);
-        if (config.textAlign && alignClasses.includes(config.textAlign)) {
-            element.classList.add(config.textAlign);
+            // אפשר להוסיף כאן סגנונות ברירת מחדל לווידג'טים אם רוצים
         }
     }
-    
-    // --- Apply Custom ID and Classes ---
-    if (config.customId) {
-        element.id = config.customId;
-    } else {
-         element.removeAttribute('id');
-    }
-    
-    // Handle custom classes carefully
-    const previousCustomClasses = element.dataset.customClasses ? element.dataset.customClasses.split(' ') : [];
-    element.classList.remove(...previousCustomClasses);
-    
-    if (config.customClass) {
-        const newCustomClasses = config.customClass.split(' ').filter(c => c.trim() !== '');
-        element.classList.add(...newCustomClasses);
-        element.dataset.customClasses = newCustomClasses.join(' '); // Store for removal next time
-    } else {
-         element.removeAttribute('data-custom-classes');
-    }
-
-    console.log('Styles applied directly to:', element);
 }
+
+// --- פונקציית עזר שהוסרה מ-core.js אך שימושית כאן ---
+function getWidgetModule(widgetType) {
+    switch (widgetType) {
+        case 'text':
+            return TextWidget;
+        // Add cases for other widget types here
+        default:
+            console.error('Unknown widget type in render.js:', widgetType);
+            return null;
+    }
+}
+
+// ... (פונקציות עזר אחרות כמו selectElement, deleteRow, duplicateWidget וכו' נשארות במקומן) 
+// יש לוודא שפונקציות אלו לא מתנגשות או מכילות לוגיקה שצריכה לעבור ל-core.js

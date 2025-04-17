@@ -9,18 +9,46 @@ import {
     createNumberInput, 
     createSelect,
     createSlider,
-    createButtonGroup // Add this import
-    // Import more helpers as needed
+    createButtonGroup 
 } from './common-settings.js';
+
+// --- הוספה: ייבוא פונקציית שמירה רספונסיבית ---
+import { saveResponsiveSetting, getSettingOverrideStatus, getEffectiveConfig, getNestedValue } from './render-responsive.js';
+// ---------------------------------------------
+
+// --- הוספה: פונקציית עזר להמרת RGBA ל-HEX (אם היא לא קיימת ב common-settings) ---
+function rgbaToHex(rgbaString) {
+    // Simple check if it might be RGBA
+    if (typeof rgbaString !== 'string' || !rgbaString.toLowerCase().startsWith('rgba')) {
+        return rgbaString; // Return original if not RGBA or not string
+    }
+    try {
+        const rgba = rgbaString.match(/\d+(\.\d+)?/g);
+        if (!rgba || rgba.length < 3) return rgbaString; // Invalid format
+
+        const r = parseInt(rgba[0]).toString(16).padStart(2, '0');
+        const g = parseInt(rgba[1]).toString(16).padStart(2, '0');
+        const b = parseInt(rgba[2]).toString(16).padStart(2, '0');
+        
+        // Handle optional alpha for opacity input, but hex doesn't include alpha
+        // let alpha = 'ff'; 
+        // if (rgba.length === 4) { alpha = Math.round(parseFloat(rgba[3]) * 255).toString(16).padStart(2, '0'); }
+
+        return `#${r}${g}${b}`;
+    } catch (e) {
+        console.warn("Failed to convert RGBA to HEX:", e);
+        return rgbaString; // Return original on error
+    }
+}
+// ---------------------------------------------------------------------------------
 
 console.log('Column Settings module loaded');
 
 // --- Exported Functions ---
 
-export function populateColumnContentTab(panel, columnData, updateCallback, rowData) {
-    panel.innerHTML = ''; // Clear
-    if (!columnData.config) columnData.config = {};
-    const config = columnData.config;
+export function populateColumnContentTab(panel, elementData, effectiveConfig, updateCallback, rowData) {
+    panel.innerHTML = ''; 
+    const config = effectiveConfig; 
 
     // Initialize defaults
     if (config.verticalAlign === undefined) config.verticalAlign = 'flex-start'; // Default top
@@ -36,6 +64,12 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
         }
     }
 
+    // --- הוספה: קביעת גבול עליון דינמי ---
+    const isSingleColumn = rowData && rowData.columns && rowData.columns.length === 1;
+    const maxAllowedWidth = isSingleColumn ? 100 : 95;
+    const minAllowedWidth = 5; // לשמור על גבול תחתון קבוע
+    // ----------------------------------------
+
     // --- Layout Group ---
     const { accordionItem: layoutAccordion, contentDiv: layoutContent } = createSettingsGroup('פריסה', true);
 
@@ -50,7 +84,7 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
     const initialWidthValue = parseFloat(config.widthPercent).toFixed(2);
 
     // Create slider - immediate callback only updates number input and config (NO state update)
-    const widthSliderWrapper = createSlider(null, initialWidthValue, 5, 95, 0.1, (value) => {
+    const widthSliderWrapper = createSlider(null, initialWidthValue, minAllowedWidth, maxAllowedWidth, 0.1, (value) => {
         const newValue = parseFloat(value).toFixed(2);
         config.widthPercent = newValue; // Update config directly for immediate feedback
         widthNumberInput.querySelector('input').value = newValue; // Update linked input visually
@@ -62,19 +96,22 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
     // Create number input - immediate callback only updates slider and config (NO state update)
     const widthNumberInput = createNumberInput(null, initialWidthValue, (value) => {
         const newValue = parseFloat(value).toFixed(2);
-        const clampedValue = Math.max(5, Math.min(95, newValue)); // Clamp for visual consistency
+        // --- שינוי: שימוש בגבולות דינמיים --- 
+        const clampedValue = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, newValue)); 
+        // ------------------------------------
         config.widthPercent = clampedValue; // Update config directly
         sliderInput.value = clampedValue; // Update linked input visually
         widthNumberInput.querySelector('input').value = clampedValue; // Ensure number input shows clamped value
         // DO NOT call handleWidthChange or updateCallback here
-    }, 5, 95, 0.1);
+    }, minAllowedWidth, maxAllowedWidth, 0.1);
     const numberInput = widthNumberInput.querySelector('input');
 
     // Function to finalize width change (called on 'change' event)
     const finalizeWidthChange = (event) => {
         let finalValue = parseFloat(event.target.value);
-        // Clamp the final value definitively
-        finalValue = Math.max(5, Math.min(95, finalValue));
+        // --- שינוי: שימוש בגבולות דינמיים גם ב-finalization ---
+        finalValue = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, finalValue));
+        // -----------------------------------------------------
         const finalValueStr = finalValue.toFixed(2);
 
         // Ensure both inputs and config reflect the final clamped value
@@ -82,9 +119,10 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
         sliderInput.value = finalValue;
         numberInput.value = finalValueStr; 
 
-        console.log(`Finalizing width change for ${columnData.id} to ${finalValueStr}%`);
-        // Now call the function that updates state and triggers full callback
-        handleWidthChange(columnData.id, finalValueStr, updateCallback, rowData);
+        console.log(`Finalizing width change for ${elementData.id} to ${finalValueStr}% (Update logic TBD)`);
+        // קריאה ל-updateCallback - הוא יצטרך להיות חכם יותר בהמשך
+        // כרגע, זה יגרום לשמירה של ה-state המלא ורינדור מחדש
+        updateCallback(); // קריאה פשוטה ל-updateCallback כרגע
     };
 
     // Add 'change' event listeners to trigger the final update
@@ -114,7 +152,7 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
             { value: 'space-around', label: 'רווח מסביב' }
         ],
         config.verticalAlign,
-        (value) => { config.verticalAlign = value; updateCallback(); } // Requires CSS on column-widgets-container
+        (value) => { saveResponsiveSetting(elementData, ['verticalAlign'], value, updateCallback); }
     ));
     layoutContent.appendChild(vAlignContainer);
 
@@ -133,7 +171,7 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
             { value: 'stretch', label: 'מתיחה' } // Default for block elements
         ],
         config.horizontalAlign,
-        (value) => { config.horizontalAlign = value; updateCallback(); } // Requires CSS on column-widgets-container
+        (value) => { saveResponsiveSetting(elementData, ['horizontalAlign'], value, updateCallback); }
     ));
     layoutContent.appendChild(hAlignContainer);
 
@@ -141,8 +179,7 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
     const spacingContainer = document.createElement('div');
     spacingContainer.className = 'mb-4';
     spacingContainer.appendChild(createNumberInput('מרווח בין ווידג\'טים (px)', config.widgetSpacing, (value) => {
-        config.widgetSpacing = parseInt(value) || 0;
-        updateCallback(); 
+        saveResponsiveSetting(elementData, ['widgetSpacing'], parseInt(value) || 0, updateCallback);
     }, 0)); 
     layoutContent.appendChild(spacingContainer);
     
@@ -161,24 +198,34 @@ export function populateColumnContentTab(panel, columnData, updateCallback, rowD
             { value: 'section', label: 'section' }
         ],
         config.htmlTag,
-        (value) => { config.htmlTag = value; updateCallback(); }
+        (value) => { saveResponsiveSetting(elementData, ['htmlTag'], value, updateCallback); }
     ));
     layoutContent.appendChild(tagContainer);
 
     panel.appendChild(layoutAccordion);
 }
 
-export function populateColumnDesignTab(panel, columnData, updateCallback) {
-    panel.innerHTML = ''; // Clear
-    if (!columnData.config) columnData.config = {};
-    if (!columnData.config.styles) columnData.config.styles = {};
-    const styles = columnData.config.styles;
+export function populateColumnDesignTab(panel, elementData, effectiveConfig, updateCallback) {
+    panel.innerHTML = ''; 
+    const config = effectiveConfig; 
+    const styles = elementData.config.styles || {}; 
 
     // Initialize defaults if they don't exist
     if (styles.backgroundColor === undefined) styles.backgroundColor = ''; 
-    if (!styles.padding) styles.padding = { top: '10', right: '10', bottom: '10', left: '10', linked: true }; 
+    if (!styles.padding) {
+        styles.padding = { top: '10', right: '10', bottom: '10', left: '10', unit: 'px' };
+    } else if (styles.padding.unit === undefined) {
+        styles.padding.unit = 'px';
+    }
     if (!styles.border) styles.border = { width: '0', style: 'none', color: '#000000' };
     if (!styles.borderRadius) styles.borderRadius = { value: '0', unit: 'px' };
+
+    // --- פונקציית עזר לטעינת ערך אפקטיבי לברייקפוינט ספציפי --- 
+    const fetchSettingValue = (breakpoint, path) => {
+        const specificEffectiveConfig = getEffectiveConfig(elementData, breakpoint);
+        return getNestedValue(specificEffectiveConfig, path);
+    };
+    // -------------------------------------------------------------
 
     // --- Background --- 
     const { accordionItem: bgAccordion, contentDiv: bgContent } = createSettingsGroup('רקע', true);
@@ -187,11 +234,8 @@ export function populateColumnDesignTab(panel, columnData, updateCallback) {
     bgColorLabel.textContent = 'צבע רקע';
     bgContent.appendChild(bgColorLabel);
     bgContent.appendChild(createColorInput(
-        styles.backgroundColor || '#ffffff',
-        (value) => {
-            styles.backgroundColor = value;
-            updateCallback();
-        }
+        config.styles?.backgroundColor || '#ffffff',
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'backgroundColor'], value, updateCallback); }
     ));
     panel.appendChild(bgAccordion);
 
@@ -203,7 +247,24 @@ export function populateColumnDesignTab(panel, columnData, updateCallback) {
         { key: 'bottom', label: 'תחתון', placeholder: '10' },
         { key: 'left', label: 'שמאל', placeholder: '10' }
     ];
-    paddingContent.appendChild(createLinkedInputs(paddingLabels, styles.padding, 'px', true, updateCallback));
+    const paddingSettingPath = ['styles', 'padding']; // נתיב ההגדרה
+    const effectivePadding = config.styles?.padding || { top: '10', right: '10', bottom: '10', left: '10', unit: 'px' };
+    const paddingOverrideStatus = getSettingOverrideStatus(elementData, paddingSettingPath);
+    paddingContent.appendChild(createLinkedInputs(
+        paddingLabels, 
+        effectivePadding, 
+        effectivePadding.unit || 'px', 
+        true, 
+        (newValue, localBreakpointContext) => { 
+            saveResponsiveSetting(elementData, paddingSettingPath, newValue, localBreakpointContext, updateCallback);
+        },
+        true, // isResponsive
+        paddingOverrideStatus,
+        // --- הוספה: העברת הקולבק לטעינה והנתיב ---
+        (breakpoint) => fetchSettingValue(breakpoint, paddingSettingPath),
+        paddingSettingPath
+        // ------------------------------------------
+    ));
     panel.appendChild(paddingAccordion);
 
     // --- Border Section ---
@@ -213,58 +274,82 @@ export function populateColumnDesignTab(panel, columnData, updateCallback) {
     borderColorLabel.textContent = 'צבע';
     borderContent.appendChild(borderColorLabel);
     borderContent.appendChild(createColorInput(
-        styles.border.color || '#000000', // Default to black if undefined
-        (value) => { styles.border.color = value; updateCallback(); }
+        config.styles?.border?.color || '#000000',
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'color'], value, updateCallback); }
     ));
-    const borderControlsRow = document.createElement('div');
-    borderControlsRow.className = 'grid grid-cols-2 gap-2 mt-3';
-    const widthWithLabel = document.createElement('div'); widthWithLabel.className = 'flex flex-col';
-    const widthLabel = document.createElement('span'); widthLabel.className = 'text-xs text-gray-500 mb-1'; widthLabel.textContent = 'עובי';
+    
+    // Width and Style in a row
+    const strokeControlsRow = document.createElement('div');
+    strokeControlsRow.className = 'grid grid-cols-2 gap-2 mt-3';
+
+    // Width with label
+    const widthWithLabel = document.createElement('div');
+    widthWithLabel.className = 'flex flex-col';
+    const widthLabel = document.createElement('span');
+    widthLabel.className = 'text-xs text-gray-500 mb-1';
+    widthLabel.textContent = 'עובי';
     widthWithLabel.appendChild(widthLabel);
-    widthWithLabel.appendChild(createNumberInput(null, parseInt(styles.border.width) || 0, (value) => { styles.border.width = parseInt(value) || 0; updateCallback(); }, 0, 50, 1));
-    const styleWithLabel = document.createElement('div'); styleWithLabel.className = 'flex flex-col';
-    const styleLabel = document.createElement('span'); styleLabel.className = 'text-xs text-gray-500 mb-1'; styleLabel.textContent = 'סגנון';
+    widthWithLabel.appendChild(createNumberInput(null, parseInt(config.styles?.border?.width) || 0, 
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'width'], `${parseInt(value) || 0}px`, updateCallback); }, 0, 50, 1));
+
+    // Style with label
+    const styleWithLabel = document.createElement('div');
+    styleWithLabel.className = 'flex flex-col';
+    const styleLabel = document.createElement('span');
+    styleLabel.className = 'text-xs text-gray-500 mb-1';
+    styleLabel.textContent = 'סגנון';
     styleWithLabel.appendChild(styleLabel);
     styleWithLabel.appendChild(createSelect(
         [{value: 'solid', label:'רציף'}, {value: 'dashed', label:'מקווקו'}, {value: 'dotted', label:'נקודות'}, {value: 'none', label: 'ללא'}],
-        styles.border.style,
-        (value) => { styles.border.style = value; updateCallback(); }
+        config.styles?.border?.style || 'none',
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'style'], value, updateCallback); }
     ));
-    borderControlsRow.appendChild(widthWithLabel);
-    borderControlsRow.appendChild(styleWithLabel);
-    borderContent.appendChild(borderControlsRow);
-    panel.appendChild(borderAccordion);
 
-    // --- Border Radius Section ---
-    const { accordionItem: radiusAccordion, contentDiv: radiusContent } = createSettingsGroup('עיגול פינות (Radius)');
+    strokeControlsRow.appendChild(widthWithLabel);
+    strokeControlsRow.appendChild(styleWithLabel);
+    borderContent.appendChild(strokeControlsRow);
+    
+    // Border Radius
     const radiusContainer = document.createElement('div');
-    radiusContainer.className = 'grid grid-cols-2 gap-2';
-    radiusContainer.appendChild(createNumberInput(null, parseInt(styles.borderRadius.value) || 0, (value) => { styles.borderRadius.value = parseInt(value) || 0; updateCallback(); }, 0, 100));
+    radiusContainer.className = 'mt-3 grid grid-cols-2 gap-2';
+    const radiusLabel = document.createElement('span');
+    radiusLabel.className = 'text-xs text-gray-500 mb-1 col-span-2';
+    radiusLabel.textContent = 'עיגול פינות';
+    radiusContainer.appendChild(radiusLabel);
+    radiusContainer.appendChild(createNumberInput(null, parseInt(config.styles?.borderRadius?.value) || 0,
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'borderRadius', 'value'], `${parseInt(value) || 0}`, updateCallback); }, 0));
     radiusContainer.appendChild(createSelect(
-        [
-            { value: 'px', label: 'px' },
-            { value: '%', label: '%' }
-        ],
-        styles.borderRadius.unit,
-        (value) => { styles.borderRadius.unit = value; updateCallback(); }
+        [{value: 'px', label: 'px'}, {value: '%', label: '%'}],
+        config.styles?.borderRadius?.unit || 'px',
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'borderRadius', 'unit'], value, updateCallback); }
     ));
-    radiusContent.appendChild(radiusContainer);
-    panel.appendChild(radiusAccordion);
+    borderContent.appendChild(radiusContainer);
+
+    panel.appendChild(borderAccordion);
 }
 
-export function populateColumnAdvancedTab(panel, columnData, updateCallback) {
-    panel.innerHTML = ''; // Clear
-    if (!columnData.config) columnData.config = {};
-    if (!columnData.config.styles) columnData.config.styles = {}; // Ensure styles exist
-    const config = columnData.config;
-    const styles = columnData.config.styles;
+export function populateColumnAdvancedTab(panel, elementData, effectiveConfig, updateCallback) {
+    panel.innerHTML = ''; 
+    const config = effectiveConfig; 
+    const styles = elementData.config.styles || {};
 
     // Initialize defaults if they don't exist
-    if (!styles.margin) styles.margin = { top: '', right: '', bottom: '', left: '', linked: true };
+    if (!styles.margin) {
+        styles.margin = { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
+    } else if (styles.margin.unit === undefined) {
+        styles.margin.unit = 'px';
+    }
     if (!styles.boxShadow) styles.boxShadow = { type: 'none', x: '0', y: '0', blur: '0', spread: '0', color: 'rgba(0,0,0,0.1)'};
     if (config.customId === undefined) config.customId = '';
     if (config.customClass === undefined) config.customClass = '';
     if (!config.visibility) config.visibility = { desktop: true, tablet: true, mobile: true };
+
+    // --- פונקציית עזר לטעינת ערך אפקטיבי לברייקפוינט ספציפי --- 
+    const fetchSettingValue = (breakpoint, path) => {
+        const specificEffectiveConfig = getEffectiveConfig(elementData, breakpoint);
+        return getNestedValue(specificEffectiveConfig, path);
+    };
+    // -------------------------------------------------------------
 
     // --- Margin Section ---
     const { accordionItem: marginAccordion, contentDiv: marginContent } = createSettingsGroup('שוליים (Margin)');
@@ -274,7 +359,24 @@ export function populateColumnAdvancedTab(panel, columnData, updateCallback) {
         { key: 'bottom', label: 'תחתון', placeholder: '0' },
         { key: 'left', label: 'שמאל', placeholder: '0' }
     ];
-    marginContent.appendChild(createLinkedInputs(marginLabels, styles.margin, 'px', true, updateCallback));
+    const marginSettingPath = ['styles', 'margin']; // נתיב ההגדרה
+    const effectiveMargin = config.styles?.margin || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
+    const marginOverrideStatus = getSettingOverrideStatus(elementData, marginSettingPath);
+    marginContent.appendChild(createLinkedInputs(
+        marginLabels, 
+        effectiveMargin, 
+        effectiveMargin.unit || 'px', 
+        true, 
+        (newValue, localBreakpointContext) => { 
+            saveResponsiveSetting(elementData, marginSettingPath, newValue, localBreakpointContext, updateCallback);
+        },
+        true, // isResponsive
+        marginOverrideStatus,
+        // --- הוספה: העברת הקולבק לטעינה והנתיב ---
+        (breakpoint) => fetchSettingValue(breakpoint, marginSettingPath),
+        marginSettingPath
+        // ------------------------------------------
+    ));
     panel.appendChild(marginAccordion);
 
     // --- Shadow Section ---
@@ -291,7 +393,7 @@ export function populateColumnAdvancedTab(panel, columnData, updateCallback) {
         styles.boxShadow.type, 
         (value) => { 
             styles.boxShadow.type = value; 
-            populateColumnAdvancedTab(panel, columnData, updateCallback); 
+            updateCallback(); 
         }
     ));
     shadowContent.appendChild(shadowTypeRow);
@@ -321,28 +423,33 @@ export function populateColumnAdvancedTab(panel, columnData, updateCallback) {
     const { accordionItem: idClassAccordion, contentDiv: idClassContent } = createSettingsGroup('מזהים וקלאסים');
     const idContainer = document.createElement('div'); idContainer.className = 'mb-3';
     idContainer.appendChild(createTextInput('Custom ID', config.customId, (value) => {
-        config.customId = value.replace(/[^a-zA-Z0-9-_]/g, '').trim();
+        elementData.config.customId = value.replace(/[^a-zA-Z0-9-_]/g, '').trim();
         // No callback needed for ID usually
     }, 'my-unique-col-id'));
     idClassContent.appendChild(idContainer);
     
     const classContainer = document.createElement('div'); classContainer.className = 'mb-3';
     classContainer.appendChild(createTextInput('Custom CSS Classes', config.customClass, (value) => {
-        config.customClass = value.replace(/[^a-zA-Z0-9-_\s]/g, '').trim();
+        elementData.config.customClass = value.replace(/[^a-zA-Z0-9-_\s]/g, '').trim();
         updateCallback(); // Rerender needed for classes
     }, 'my-col-class another-class'));
     idClassContent.appendChild(classContainer);
     panel.appendChild(idClassAccordion);
 
-    // --- Visibility Section (Placeholder) ---
+    // --- Visibility Section (Responsive) ---
     const { accordionItem: visibilityAccordion, contentDiv: visibilityContent } = createSettingsGroup('נראות (Visibility)');
-    const placeholder = document.createElement('p');
-    placeholder.textContent = 'הגדרות נראות יופיעו כאן (בקרוב).';
-    placeholder.className = 'text-gray-500 text-sm p-2';
-    visibilityContent.appendChild(placeholder);
-    // TODO: Add checkboxes or toggles for desktop, tablet, mobile visibility
-    // e.g., config.visibility = { desktop: true, tablet: true, mobile: false };
-    // Need corresponding CSS classes applied in render.js based on these settings and current view
+    const currentVisibility = elementData.config.visibility || { desktop: true, tablet: true, mobile: true }; 
+    if (typeof createVisibilityControls === 'function') {
+        visibilityContent.appendChild(
+            createVisibilityControls(currentVisibility, (newVisibility) => {
+                // TODO: עדכון שמירת Visibility תצטרך גם היא לקבל הקשר מקומי 
+                const currentBreakpoint = window.currentBreakpoint || 'desktop'; // << צריך לשנות
+                saveResponsiveSetting(elementData, ['visibility', currentBreakpoint], newVisibility[currentBreakpoint], updateCallback);
+            })
+        );
+    } else {
+       // ... (error handling)
+    }
     panel.appendChild(visibilityAccordion);
 }
 

@@ -6,6 +6,8 @@ import * as CommonSettings from './common-settings.js'; // Import common setting
 import { populateRowContentTab, populateRowDesignTab, populateRowAdvancedTab } from './row-settings.js';
 // Import column settings functions
 import { populateColumnContentTab, populateColumnDesignTab, populateColumnAdvancedTab } from './column-settings.js';
+// הוספה: ייבוא פונקציות רספונסיביות
+import { getEffectiveConfig, getCurrentBreakpoint } from './render-responsive.js'; 
 // Import other widget modules as needed
 // import * as CommonSettings from './common-settings.js';
 
@@ -127,7 +129,9 @@ function handleAddRowWithColumns(columnCount) {
                 widthPercent: initialWidthPercent, // הוספת רוחב באחוזים
                 widgetSpacing: 15, // ברירת מחדל למרווח פנימי
                 htmlTag: 'div', // ברירת מחדל לתגית
-                styles: {} // מקום לסגנונות ספציפיים לעמודה
+                styles: {}, // מקום לסגנונות ספציפיים לעמודה
+                visibility: { desktop: true, tablet: true, mobile: true }, // הוספת ברירת מחדל לנראות
+                responsiveOverrides: {} // אתחול אובייקט לדריסות רספונסיביות
             }
         });
     }
@@ -137,7 +141,9 @@ function handleAddRowWithColumns(columnCount) {
         id: rowId,
         columns: columns,
         config: {
-            styles: {} // מקום לסגנונות ספציפיים לשורה
+            styles: {}, // מקום לסגנונות ספציפיים לשורה
+            visibility: { desktop: true, tablet: true, mobile: true }, // הוספת ברירת מחדל לנראות לשורה
+            responsiveOverrides: {} // אתחול אובייקט לדריסות רספונסיביות לשורה
         }
     });
     
@@ -194,6 +200,23 @@ function handleResponsiveViewChange(event) {
             previewArea.classList.add('view-mobile');
             break;
     }
+
+    // --- הוספה: רינדור מחדש של התוכן כדי להחיל סגנונות רספונסיביים ---
+    console.log('Re-rendering page content for new breakpoint...');
+    Render.renderPageContent(pageState, pageContentContainer);
+    // שינוי: יש לאתחל מחדש את SortableJS אחרי כל רינדור מחדש
+    initSortables(); 
+    // --- סוף הוספה ---
+
+    // --- הוספה: טעינה מחדש של פאנל ההגדרות לאלמנט הנבחר ---
+    if (selectedElement) {
+        console.log(`Reloading settings panel for ${selectedElement.type} ${selectedElement.id} at new breakpoint: ${view}`);
+        // מצא את הטאב הפעיל כרגע
+        const activeTabButton = document.querySelector('.tab-button[data-active="true"]');
+        const activeTab = activeTabButton ? activeTabButton.dataset.tab : 'content'; // ברירת מחדל לתוכן
+        loadSettingsTabContent(activeTab); // טען מחדש את הטאב הפעיל עם ההקשר החדש
+    }
+    // ------------------------------------------------------------
 }
 
 function handleTabClick(event) {
@@ -288,6 +311,12 @@ function loadSettingsTabContent(tabName) {
         return;
     }
 
+    // --- שינוי: קבלת קונפיג אפקטיבי --- 
+    const currentBreakpoint = getCurrentBreakpoint();
+    console.log(`Loading settings for ${selectedElement.type} ${selectedElement.id} at breakpoint: ${currentBreakpoint}`);
+    const effectiveConfig = getEffectiveConfig(elementData, currentBreakpoint);
+    // -------------------------------------
+
     // Get the specific tab panel element
     const contentTab = document.getElementById('tab-content-content');
     const designTab = document.getElementById('tab-content-design');
@@ -311,73 +340,140 @@ function loadSettingsTabContent(tabName) {
 
     // Define the update callback
     const updateCallback = () => {
+        // הערה: saveResponsiveSetting כבר עדכן את ה-elementData המקורי
+        // שמוחזק ב-pageState, אז אנחנו לא צריכים לקרוא לו שוב כאן.
+
+        let stylesNeedReapply = false;
+        let targetElementId = selectedElement ? selectedElement.id : null;
+        let changedColumnData = null;
+
+        if (selectedElement && selectedElement.type === 'column') {
+            const currentElementData = findElementData(pageState, selectedElement.id);
+            const rowData = findRowContainingElement(pageState, selectedElement.id);
+            
+            if (currentElementData && rowData && rowData.columns && rowData.columns.length > 1) {
+                // --- הוספה: לוגיקת התאמת רוחב עמודות אחיות ---
+                console.log('Adjusting sibling column widths...');
+                changedColumnData = currentElementData;
+                const changedColumnId = changedColumnData.id;
+                const currentWidth = parseFloat(changedColumnData.config?.widthPercent || (100 / rowData.columns.length));
+
+                const otherColumns = rowData.columns.filter(c => c.id !== changedColumnId);
+                let totalWidthOfOthersBeforeChange = 0;
+                otherColumns.forEach(col => {
+                    // חישוב מחדש של הקונפיג האפקטיבי *לפני* השינוי עבור השכנות
+                    // (אולי עדיף לשמור את המצב הקודם? כרגע נשתמש בערך הנוכחי)
+                    const effectiveSiblingConfig = Render.getEffectiveConfig(col, getCurrentBreakpoint()); // השתמש בפונקציה המיובאת
+                    totalWidthOfOthersBeforeChange += parseFloat(effectiveSiblingConfig.widthPercent || (100 / rowData.columns.length));
+                });
+
+                const remainingWidth = 100 - currentWidth;
+                let distributedWidthSum = 0;
+                const minAllowedWidth = 5;
+                const maxAllowedWidth = 95; // Assume max 95 if more than one column
+
+                otherColumns.forEach((col, index) => {
+                    const effectiveSiblingConfig = Render.getEffectiveConfig(col, getCurrentBreakpoint()); // קבל שוב
+                    const originalOtherWidth = parseFloat(effectiveSiblingConfig.widthPercent || (100 / rowData.columns.length));
+                    let newOtherWidth = (totalWidthOfOthersBeforeChange > 0) 
+                                        ? (originalOtherWidth / totalWidthOfOthersBeforeChange) * remainingWidth
+                                        : (100 / otherColumns.length); // Fallback if total was 0
+
+                    newOtherWidth = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, newOtherWidth));
+                    
+                    // שמור את הרוחב החדש ישירות ב-config הבסיסי של העמודה האחות
+                    // (או ב-override המתאים אם אנחנו לא בדסקטופ? כרגע מפשט ושומר בבסיס)
+                    // *** תיקון נדרש כאן: השמירה צריכה להיות רספונסיבית גם לשכנות ***
+                    // *** לעת עתה, נשמור רק לבסיס לצורך התקדמות ***
+                    if (!col.config) col.config = {};
+                    col.config.widthPercent = newOtherWidth.toFixed(2);
+                    console.log(` -> Adjusted sibling ${col.id} base width to ${col.config.widthPercent}%`);
+                    
+                    distributedWidthSum += newOtherWidth;
+                    stylesNeedReapply = true; // צריך לרנדר מחדש את השכנות
+                });
+
+                // Adjust the last column slightly for rounding errors
+                const finalAdjustment = remainingWidth - distributedWidthSum;
+                if (Math.abs(finalAdjustment) > 0.1 && otherColumns.length > 0) {
+                    const lastOtherCol = otherColumns[otherColumns.length - 1];
+                    if (lastOtherCol.config) {
+                        let lastOtherWidth = parseFloat(lastOtherCol.config.widthPercent) + finalAdjustment;
+                        lastOtherWidth = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, lastOtherWidth)); 
+                        lastOtherCol.config.widthPercent = lastOtherWidth.toFixed(2);
+                         console.log(` -> Final adjustment for sibling ${lastOtherCol.id} to ${lastOtherCol.config.widthPercent}%`);
+                    }
+                }
+                // --- סוף לוגיקת התאמה ---
+            }
+        }
+
+        // שמירת המצב המעודכן (כולל שינויים בשכנות אם היו)
         savePageState();
 
-        if (selectedElement) {
-            const elementData = findElementData(pageState, selectedElement.id);
-
-            if (selectedElement.type === 'column') {
-                const rowData = findRowContainingElement(pageState, selectedElement.id);
-                if (rowData && rowData.columns) {
-                    console.log('Column changed, applying styles to all columns in row:', rowData.id);
-                    rowData.columns.forEach(col => {
-                        const colNode = document.querySelector(`[data-element-id="${col.id}"]`);
-                        if (colNode) {
-                            Render.applyStylesToElement(colNode, col);
-                        } else {
-                            console.warn(`Could not find DOM node for column ${col.id} during sibling update.`);
-                        }
-                    });
-                } else {
-                    console.warn('Could not find parent row data for column update.');
-                }
-            } else if (elementData) {
-                const elementNode = document.querySelector(`[data-element-id="${selectedElement.id}"]`);
+        // הרצת עדכון ויזואלי
+        if (targetElementId) {
+            const currentElementData = findElementData(pageState, targetElementId); 
+            if (currentElementData) {
+                const elementNode = document.querySelector(`[data-element-id="${targetElementId}"]`);
                 if (elementNode) {
-                    console.log('Applying styles directly to selected element (non-column):', selectedElement.id);
-                    Render.applyStylesToElement(elementNode, elementData);
+                    console.log('Update Callback: Re-applying styles to element:', targetElementId);
+                    Render.applyStylesToElement(elementNode, currentElementData); // עדכון האלמנט שנבחר
+
+                    // עדכון שכנות אם הרוחב השתנה
+                    if (stylesNeedReapply && changedColumnData) {
+                         const rowData = findRowContainingElement(pageState, changedColumnData.id);
+                         if (rowData && rowData.columns) {
+                            console.log('Applying styles to updated sibling columns in row:', rowData.id);
+                            rowData.columns.forEach(col => {
+                                if (col.id !== changedColumnData.id) { // רק השכנות
+                                    const colNode = document.querySelector(`[data-element-id="${col.id}"]`);
+                                    if (colNode) {
+                                        Render.applyStylesToElement(colNode, col);
+                                    }
+                                }
+                            });
+                         }
+                    }
                 } else {
-                    console.warn('Could not find element node for direct style update (non-column).');
+                    console.warn('Update Callback: Could not find element node for style update.');
                 }
             } else {
-                 console.warn('Could not find element data for style update.');
+                 console.warn('Update Callback: Could not find element data for style update.');
             }
         }
     };
 
     // Populate the active tab based on element type
     const elementType = selectedElement.type;
+    // --- שינוי: העברת effectiveConfig לפונקציות populate ---
     switch (elementType) {
         case 'row':
-            // שימוש בפונקציות המיובאות מ-row-settings.js
             if (tabName === 'content') {
-                populateRowContentTab(activeTabPanel, elementData, updateCallback);
+                populateRowContentTab(activeTabPanel, elementData, effectiveConfig, updateCallback);
             } else if (tabName === 'design') {
-                populateRowDesignTab(activeTabPanel, elementData, updateCallback);
+                populateRowDesignTab(activeTabPanel, elementData, effectiveConfig, updateCallback);
             } else if (tabName === 'advanced') {
-                populateRowAdvancedTab(activeTabPanel, elementData, updateCallback);
+                populateRowAdvancedTab(activeTabPanel, elementData, effectiveConfig, updateCallback);
             }
             break;
         case 'column':
-            // Placeholder for column settings
-            // --- מציאת נתוני השורה והעברתם ---
             const parentRowData = findRowContainingElement(pageState, elementData.id);
-            // ----------------------------------
             if (tabName === 'content' && typeof populateColumnContentTab === 'function') {
-                // --- שינוי: הוספת parentRowData לקריאה ---
-                populateColumnContentTab(activeTabPanel, elementData, updateCallback, parentRowData);
+                populateColumnContentTab(activeTabPanel, elementData, effectiveConfig, updateCallback, parentRowData);
             } else if (tabName === 'design' && typeof populateColumnDesignTab === 'function') {
-                populateColumnDesignTab(activeTabPanel, elementData, updateCallback);
+                populateColumnDesignTab(activeTabPanel, elementData, effectiveConfig, updateCallback);
             } else if (tabName === 'advanced') {
-                populateColumnAdvancedTab(activeTabPanel, elementData, updateCallback);
+                populateColumnAdvancedTab(activeTabPanel, elementData, effectiveConfig, updateCallback);
             }
             break;
         case 'widget':
             const widgetModule = getWidgetModule(elementData.type);
             if (widgetModule && widgetModule.createSettingsTabs) {
-                const widgetTabs = widgetModule.createSettingsTabs(activeTabPanel, elementData, updateCallback);
+                 // עדכון קריאה: העברת elementData ו-effectiveConfig בנפרד
+                const widgetTabs = widgetModule.createSettingsTabs(activeTabPanel, elementData, effectiveConfig, updateCallback);
                 if (widgetTabs[tabName]) {
-                    widgetTabs[tabName](); // Call the specific tab function
+                    widgetTabs[tabName](); 
                 } else {
                     activeTabPanel.innerHTML = `<p class="p-4 text-gray-500">Widget '${elementData.type}' does not have a '${tabName}' tab.</p>`;
                 }
@@ -798,6 +894,23 @@ function initBuilder() {
     // הוספה: מאזין לאירוע בחירת אלמנט מ-render.js
     window.addEventListener('select-element', handleElementSelectionRequest);
 
+    // --- הוספה: מאזין לאירוע שינוי תצוגה גלובלית מהפקדים ---
+    document.addEventListener('change-global-breakpoint', (event) => {
+        const breakpoint = event.detail.breakpoint;
+        console.log(`Core received change-global-breakpoint event for: ${breakpoint}`);
+        // מצא את הכפתור הראשי המתאים בסרגל העליון
+        const targetButton = responsiveControls.querySelector(`.responsive-button[data-view="${breakpoint}"]`);
+        if (targetButton && targetButton.dataset.active !== 'true') {
+            console.log('Simulating click on main responsive button:', targetButton);
+            targetButton.click(); // הפעל לחיצה על הכפתור הראשי
+        } else if (targetButton) {
+            console.log('Global breakpoint already set to', breakpoint);
+        } else {
+            console.error('Could not find main responsive button for breakpoint:', breakpoint);
+        }
+    });
+    // --- סוף הוספה ---
+
     // Initial SortableJS setup
     initSortables();
 
@@ -1052,6 +1165,17 @@ function deleteColumnFromState(columnId) {
         if (columnIndex !== -1) {
             row.columns.splice(columnIndex, 1);
             console.log(`Column ${columnId} removed from row ${row.id} state.`);
+
+            // --- הוספה: התאמת רוחב עמודה נותרת ---
+            if (row.columns.length === 1) {
+                if (!row.columns[0].config) {
+                    row.columns[0].config = {}; // ודא שאובייקט הקונפיג קיים
+                }
+                row.columns[0].config.widthPercent = '100'; 
+                console.log(`Row ${row.id} now has 1 column, setting width to 100%.`);
+            }
+            // --------------------------------------
+
             // Optional: Check if row is now empty and delete it?
             // if (row.columns.length === 0) {
             //     deleteRowFromState(row.id); 
