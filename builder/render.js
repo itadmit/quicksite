@@ -689,15 +689,15 @@ export function applyStylesToElement(element, elementData) {
     }
 
     const elementType = elementData.config ? (elementData.columns ? 'row' : (elementData.widgets ? 'column' : 'widget')) : 'unknown';
-    console.log(`Applying styles to ${elementType}: ${elementData.id}`);
+    // console.log(`Applying styles to ${elementType}: ${elementData.id}`);
 
-    // --- קבלת הקונפיג האפקטיבי --- 
     const currentBreakpoint = getCurrentBreakpoint();
     const config = getEffectiveConfig(elementData, currentBreakpoint);
     const styles = config.styles || {};
-    // --------------------------------
+    
+    // console.log(`   [applyStyles] Breakpoint: ${currentBreakpoint}, Element: ${elementData.id}, Effective widthPercent: ${config.widthPercent}`);
 
-    // --- טיפול בנראות (Visibility) --- 
+    // --- טיפול בנראות (Visibility) ---
     element.classList.remove('hidden-desktop', 'hidden-tablet', 'hidden-mobile'); // איפוס תחילה
     if (config.visibility) {
         if (config.visibility.desktop === false) element.classList.add('hidden-desktop');

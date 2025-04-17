@@ -230,16 +230,21 @@ if ($title) {
         <!-- Settings Panel (Left - End in RTL) -->
         <div id="settings-panel" class="w-80 bg-white shadow-sm flex flex-col h-full overflow-y-auto p-5">
             <h2 class="text-xl font-medium mb-5 text-gray-800">הגדרות</h2>
-            <div class="settings-tabs flex mb-5">
+            <!-- Give ID and hide initially -->
+            <div id="settings-tabs-container" class="settings-tabs flex mb-5 hidden">
                  <button class="tab-button flex-1 py-2.5 px-4 text-center text-sm font-medium text-gray-500 hover:text-gray-700 rounded-lg mr-1 transition-colors focus:outline-none data-[active=true]:text-primary-600 data-[active=true]:bg-primary-50" data-tab="content" data-active="true">תוכן</button>
                  <button class="tab-button flex-1 py-2.5 px-4 text-center text-sm font-medium text-gray-500 hover:text-gray-700 rounded-lg mx-1 transition-colors focus:outline-none data-[active=true]:text-primary-600 data-[active=true]:bg-primary-50" data-tab="design" data-active="false">עיצוב</button>
                  <button class="tab-button flex-1 py-2.5 px-4 text-center text-sm font-medium text-gray-500 hover:text-gray-700 rounded-lg ml-1 transition-colors focus:outline-none data-[active=true]:text-primary-600 data-[active=true]:bg-primary-50" data-tab="advanced" data-active="false">מתקדם</button>
             </div>
-            <div id="tab-content-area" class="tab-content flex-grow">
-                <!-- הוספת ה-divs הנדרשים עבור תוכן הטאבים -->
+             <!-- Placeholder message moved here, visible initially -->
+            <div id="settings-panel-placeholder" class="text-center text-gray-500 text-sm p-4 flex flex-col items-center justify-center flex-grow">
+                <i class="ri-settings-3-line text-4xl text-gray-300 mb-3"></i>
+                <span>בחר אלמנט בעמוד כדי לערוך את ההגדרות שלו.</span>
+            </div>
+             <!-- Hide tab content area initially -->
+            <div id="tab-content-area" class="tab-content flex-grow hidden">
                 <div id="tab-content-content" class="tab-panel" style="display: block;">
-                    <!-- תוכן טאב 'תוכן' יופיע כאן -->
-                    <p class="text-gray-500 text-sm p-4 text-center">בחר אלמנט לעריכה.</p>
+                    <!-- Content removed - placeholder is now outside -->
                 </div>
                 <div id="tab-content-design" class="tab-panel" style="display: none;">
                     <!-- תוכן טאב 'עיצוב' יופיע כאן -->
@@ -247,156 +252,9 @@ if ($title) {
                 <div id="tab-content-advanced" class="tab-panel" style="display: none;">
                     <!-- תוכן טאב 'מתקדם' יופיע כאן -->
                 </div>
-
-                <!-- Templates for Controls (can stay here or be moved) -->
-                <template id="padding-template">
-                    <div class="settings-accordion mb-4">
-                        <div class="settings-accordion-header flex justify-between items-center mb-3">
-                            <h3 class="text-sm font-medium text-gray-700">ריפוד</h3>
-                            <i class="ri-arrow-down-s-line text-gray-400"></i>
-                        </div>
-                        <div class="settings-accordion-content">
-                            <div class="icon-group mb-3 mx-auto w-fit">
-                                <button class="icon-button active" data-padding="all" title="כל הצדדים">
-                                    <i class="ri-border-all"></i>
-                                </button>
-                                <button class="icon-button" data-padding="vertical" title="למעלה ולמטה">
-                                    <i class="ri-border-top bottom"></i>
-                                </button>
-                                <button class="icon-button" data-padding="horizontal" title="צדדים">
-                                    <i class="ri-border-right-left"></i>
-                                </button>
-                                <button class="icon-button" data-padding="individual" title="פרטני">
-                                    <i class="ri-layout-bottom-line"></i>
-                                </button>
-                            </div>
-                            <div class="padding-inputs grid grid-cols-4 gap-2">
-                                <div class="flex flex-col items-center">
-                                    <label class="text-xs text-gray-500 mb-1">למעלה</label>
-                                    <input type="text" class="settings-input text-center py-1 px-2 h-8" value="0" data-padding="top">
-                                </div>
-                                <div class="flex flex-col items-center">
-                                    <label class="text-xs text-gray-500 mb-1">ימין</label>
-                                    <input type="text" class="settings-input text-center py-1 px-2 h-8" value="0" data-padding="right">
-                                </div>
-                                <div class="flex flex-col items-center">
-                                    <label class="text-xs text-gray-500 mb-1">למטה</label>
-                                    <input type="text" class="settings-input text-center py-1 px-2 h-8" value="0" data-padding="bottom">
-                                </div>
-                                <div class="flex flex-col items-center">
-                                    <label class="text-xs text-gray-500 mb-1">שמאל</label>
-                                    <input type="text" class="settings-input text-center py-1 px-2 h-8" value="0" data-padding="left">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-
-                <template id="layer-template">
-                    <div class="settings-accordion mb-4">
-                        <div class="settings-accordion-header flex justify-between items-center mb-3">
-                            <h3 class="text-sm font-medium text-gray-700">שכבה</h3>
-                            <i class="ri-arrow-down-s-line text-gray-400"></i>
-                        </div>
-                        <div class="settings-accordion-content">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-sm text-gray-600">מצב שילוב:</span>
-                                <div class="relative w-32">
-                                    <select class="settings-select appearance-none pr-8">
-                                        <option value="normal">רגיל</option>
-                                        <option value="multiply">כפל</option>
-                                        <option value="screen">מסך</option>
-                                        <option value="overlay">שכבה עליונה</option>
-                                    </select>
-                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
-                                        <i class="ri-arrow-down-s-line"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <div class="flex justify-between mb-1">
-                                    <label class="text-sm text-gray-600">אטימות:</label>
-                                    <span class="text-sm font-medium text-gray-700">100%</span>
-                                </div>
-                                <input type="range" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer" min="0" max="1" step="0.01" value="1">
-                            </div>
-                        </div>
-                    </div>
-                </template>
-
-                <template id="stroke-template">
-                    <div class="settings-accordion mb-4">
-                        <div class="settings-accordion-header flex justify-between items-center mb-3">
-                            <h3 class="text-sm font-medium text-gray-700">קו מתאר</h3>
-                            <i class="ri-arrow-down-s-line text-gray-400"></i>
-                        </div>
-                        <div class="settings-accordion-content">
-                            <div class="flex justify-between mb-3">
-                                <div class="relative w-32">
-                                    <div class="flex items-center h-9 px-3 rounded-lg bg-gray-50">
-                                        <span class="text-xs mr-2 w-16 uppercase">#EEEEEE</span>
-                                        <div class="w-5 h-5 bg-gray-300 rounded-sm ml-auto"></div>
-                                    </div>
-                                    <input type="color" class="absolute inset-0 opacity-0 cursor-pointer" value="#EEEEEE">
-                                </div>
-                                <input type="number" class="settings-input w-16 text-center" value="100" min="0" max="100">
-                                <button class="icon-button">
-                                    <i class="ri-eye-line"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </template>
-
-                <template id="shadow-template">
-                    <div class="settings-accordion mb-4">
-                        <div class="settings-accordion-header flex justify-between items-center mb-3">
-                            <h3 class="text-sm font-medium text-gray-700">צל</h3>
-                            <i class="ri-arrow-down-s-line text-gray-400"></i>
-                        </div>
-                        <div class="settings-accordion-content">
-                            <div class="relative w-full mb-3">
-                                <select class="settings-select appearance-none pr-8">
-                                    <option value="drop-shadow">Drop shadow</option>
-                                    <option value="none">ללא</option>
-                                </select>
-                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
-                                    <i class="ri-arrow-down-s-line"></i>
-                                </div>
-                            </div>
-                            
-                            <div class="grid grid-cols-2 gap-3 mb-3">
-                                <div>
-                                    <label class="text-xs text-gray-500 mb-1 block">X</label>
-                                    <input type="number" class="settings-input" value="0">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500 mb-1 block">Y</label>
-                                    <input type="number" class="settings-input" value="0">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500 mb-1 block">Blur</label>
-                                    <input type="number" class="settings-input" value="0">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500 mb-1 block">Spread</label>
-                                    <input type="number" class="settings-input" value="0">
-                                </div>
-                            </div>
-
-                            <div class="relative w-full">
-                                <div class="flex items-center h-9 px-3 rounded-lg bg-gray-50">
-                                    <span class="text-xs mr-2 w-24 uppercase">#000000</span>
-                                    <div class="w-5 h-5 bg-black rounded-sm ml-auto"></div>
-                                </div>
-                                <input type="color" class="absolute inset-0 opacity-0 cursor-pointer" value="#000000">
-                            </div>
-                        </div>
-                    </div>
-                </template>
-            </div>
-            <!-- Add/Save buttons were moved -->
-        </div>
+                 <!-- Templates for Controls ... -->
+             </div>
+         </div>
 
     </div> <!-- End Builder Main -->
 

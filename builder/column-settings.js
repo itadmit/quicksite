@@ -13,7 +13,7 @@ import {
 } from './common-settings.js';
 
 // --- הוספה: ייבוא פונקציית שמירה רספונסיבית ---
-import { saveResponsiveSetting, getSettingOverrideStatus, getEffectiveConfig, getNestedValue } from './render-responsive.js';
+import { saveResponsiveSetting, getSettingOverrideStatus, getEffectiveConfig, getNestedValue, getCurrentBreakpoint } from './render-responsive.js';
 // ---------------------------------------------
 
 // --- הוספה: פונקציית עזר להמרת RGBA ל-HEX (אם היא לא קיימת ב common-settings) ---
@@ -109,9 +109,7 @@ export function populateColumnContentTab(panel, elementData, effectiveConfig, up
     // Function to finalize width change (called on 'change' event)
     const finalizeWidthChange = (event) => {
         let finalValue = parseFloat(event.target.value);
-        // --- שינוי: שימוש בגבולות דינמיים גם ב-finalization ---
         finalValue = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, finalValue));
-        // -----------------------------------------------------
         const finalValueStr = finalValue.toFixed(2);
 
         // Ensure both inputs and config reflect the final clamped value
@@ -119,10 +117,11 @@ export function populateColumnContentTab(panel, elementData, effectiveConfig, up
         sliderInput.value = finalValue;
         numberInput.value = finalValueStr; 
 
-        console.log(`Finalizing width change for ${elementData.id} to ${finalValueStr}% (Update logic TBD)`);
-        // קריאה ל-updateCallback - הוא יצטרך להיות חכם יותר בהמשך
-        // כרגע, זה יגרום לשמירה של ה-state המלא ורינדור מחדש
-        updateCallback(); // קריאה פשוטה ל-updateCallback כרגע
+        console.log(`Finalizing width change for ${elementData.id} to ${finalValueStr}%`);
+        
+        // --- שינוי: הוספת getCurrentBreakpoint() כפרמטר רביעי ---
+        saveResponsiveSetting(elementData, ['config', 'widthPercent'], finalValueStr, getCurrentBreakpoint(), updateCallback);
+        // ---------------------------------------------------------
     };
 
     // Add 'change' event listeners to trigger the final update
@@ -152,7 +151,7 @@ export function populateColumnContentTab(panel, elementData, effectiveConfig, up
             { value: 'space-around', label: 'רווח מסביב' }
         ],
         config.verticalAlign,
-        (value) => { saveResponsiveSetting(elementData, ['verticalAlign'], value, updateCallback); }
+        (value) => { saveResponsiveSetting(elementData, ['config', 'verticalAlign'], value, getCurrentBreakpoint(), updateCallback); }
     ));
     layoutContent.appendChild(vAlignContainer);
 
@@ -171,7 +170,7 @@ export function populateColumnContentTab(panel, elementData, effectiveConfig, up
             { value: 'stretch', label: 'מתיחה' } // Default for block elements
         ],
         config.horizontalAlign,
-        (value) => { saveResponsiveSetting(elementData, ['horizontalAlign'], value, updateCallback); }
+        (value) => { saveResponsiveSetting(elementData, ['config', 'horizontalAlign'], value, getCurrentBreakpoint(), updateCallback); }
     ));
     layoutContent.appendChild(hAlignContainer);
 
@@ -179,7 +178,7 @@ export function populateColumnContentTab(panel, elementData, effectiveConfig, up
     const spacingContainer = document.createElement('div');
     spacingContainer.className = 'mb-4';
     spacingContainer.appendChild(createNumberInput('מרווח בין ווידג\'טים (px)', config.widgetSpacing, (value) => {
-        saveResponsiveSetting(elementData, ['widgetSpacing'], parseInt(value) || 0, updateCallback);
+        saveResponsiveSetting(elementData, ['config', 'widgetSpacing'], parseInt(value) || 0, getCurrentBreakpoint(), updateCallback);
     }, 0)); 
     layoutContent.appendChild(spacingContainer);
     
@@ -198,7 +197,7 @@ export function populateColumnContentTab(panel, elementData, effectiveConfig, up
             { value: 'section', label: 'section' }
         ],
         config.htmlTag,
-        (value) => { saveResponsiveSetting(elementData, ['htmlTag'], value, updateCallback); }
+        (value) => { saveResponsiveSetting(elementData, ['config', 'htmlTag'], value, getCurrentBreakpoint(), updateCallback); }
     ));
     layoutContent.appendChild(tagContainer);
 
@@ -235,35 +234,24 @@ export function populateColumnDesignTab(panel, elementData, effectiveConfig, upd
     bgContent.appendChild(bgColorLabel);
     bgContent.appendChild(createColorPicker(
         config.styles?.backgroundColor || 'transparent',
-        (value) => { saveResponsiveSetting(elementData, ['styles', 'backgroundColor'], value, updateCallback); }
+        // --- שינוי: הוספת getCurrentBreakpoint() ---
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'backgroundColor'], value, getCurrentBreakpoint(), updateCallback); }
+        // ----------------------------------------
     ));
     panel.appendChild(bgAccordion);
 
     // --- Padding Section --- 
     const { accordionItem: paddingAccordion, contentDiv: paddingContent } = createSettingsGroup('ריפוד (Padding)');
-    const paddingLabels = [
-        { key: 'top', label: 'עליון', placeholder: '10' },
-        { key: 'right', label: 'ימין', placeholder: '10' },
-        { key: 'bottom', label: 'תחתון', placeholder: '10' },
-        { key: 'left', label: 'שמאל', placeholder: '10' }
-    ];
-    const paddingSettingPath = ['styles', 'padding']; // נתיב ההגדרה
+    const paddingSettingPath = ['styles', 'padding'];
     const effectivePadding = config.styles?.padding || { top: '10', right: '10', bottom: '10', left: '10', unit: 'px' };
     const paddingOverrideStatus = getSettingOverrideStatus(elementData, paddingSettingPath);
     paddingContent.appendChild(createLinkedInputs(
-        paddingLabels, 
-        effectivePadding, 
-        effectivePadding.unit || 'px', 
-        true, 
-        (newValue, localBreakpointContext) => { 
-            saveResponsiveSetting(elementData, paddingSettingPath, newValue, localBreakpointContext, updateCallback);
-        },
-        true, // isResponsive
-        paddingOverrideStatus,
-        // --- הוספה: העברת הקולבק לטעינה והנתיב ---
-        (breakpoint) => fetchSettingValue(breakpoint, paddingSettingPath),
-        paddingSettingPath
-        // ------------------------------------------
+        'ריפוד',
+        elementData,
+        paddingSettingPath,
+        ['px', '%', 'em', 'rem'],
+        effectivePadding.unit || 'px',
+        updateCallback
     ));
     panel.appendChild(paddingAccordion);
 
@@ -275,7 +263,9 @@ export function populateColumnDesignTab(panel, elementData, effectiveConfig, upd
     borderContent.appendChild(borderColorLabel);
     borderContent.appendChild(createColorPicker(
         config.styles?.border?.color || '#000000',
-        (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'color'], value, updateCallback); }
+        // --- שינוי: הוספת getCurrentBreakpoint() ---
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'color'], value, getCurrentBreakpoint(), updateCallback); }
+        // ----------------------------------------
     ));
     
     // Width and Style in a row
@@ -290,7 +280,9 @@ export function populateColumnDesignTab(panel, elementData, effectiveConfig, upd
     widthLabel.textContent = 'עובי';
     widthWithLabel.appendChild(widthLabel);
     widthWithLabel.appendChild(createNumberInput(null, parseInt(config.styles?.border?.width) || 0, 
-        (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'width'], `${parseInt(value) || 0}px`, updateCallback); }, 0, 50, 1));
+        // --- שינוי: הוספת getCurrentBreakpoint() ---
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'width'], `${parseInt(value) || 0}px`, getCurrentBreakpoint(), updateCallback); }, 0, 50, 1));
+        // ----------------------------------------
 
     // Style with label
     const styleWithLabel = document.createElement('div');
@@ -302,7 +294,9 @@ export function populateColumnDesignTab(panel, elementData, effectiveConfig, upd
     styleWithLabel.appendChild(createSelect(
         [{value: 'solid', label:'רציף'}, {value: 'dashed', label:'מקווקו'}, {value: 'dotted', label:'נקודות'}, {value: 'none', label: 'ללא'}],
         config.styles?.border?.style || 'none',
-        (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'style'], value, updateCallback); }
+        // --- שינוי: הוספת getCurrentBreakpoint() ---
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'border', 'style'], value, getCurrentBreakpoint(), updateCallback); }
+        // ----------------------------------------
     ));
 
     strokeControlsRow.appendChild(widthWithLabel);
@@ -317,11 +311,15 @@ export function populateColumnDesignTab(panel, elementData, effectiveConfig, upd
     radiusLabel.textContent = 'עיגול פינות';
     radiusContainer.appendChild(radiusLabel);
     radiusContainer.appendChild(createNumberInput(null, parseInt(config.styles?.borderRadius?.value) || 0,
-        (value) => { saveResponsiveSetting(elementData, ['styles', 'borderRadius', 'value'], `${parseInt(value) || 0}`, updateCallback); }, 0));
+        // --- שינוי: הוספת getCurrentBreakpoint() ---
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'borderRadius', 'value'], `${parseInt(value) || 0}`, getCurrentBreakpoint(), updateCallback); }, 0));
+        // ----------------------------------------
     radiusContainer.appendChild(createSelect(
         [{value: 'px', label: 'px'}, {value: '%', label: '%'}],
         config.styles?.borderRadius?.unit || 'px',
-        (value) => { saveResponsiveSetting(elementData, ['styles', 'borderRadius', 'unit'], value, updateCallback); }
+        // --- שינוי: הוספת getCurrentBreakpoint() ---
+        (value) => { saveResponsiveSetting(elementData, ['styles', 'borderRadius', 'unit'], value, getCurrentBreakpoint(), updateCallback); }
+        // ----------------------------------------
     ));
     borderContent.appendChild(radiusContainer);
 
@@ -439,12 +437,12 @@ export function populateColumnAdvancedTab(panel, elementData, effectiveConfig, u
     // --- Visibility Section (Responsive) ---
     const { accordionItem: visibilityAccordion, contentDiv: visibilityContent } = createSettingsGroup('נראות (Visibility)');
     const currentVisibility = elementData.config.visibility || { desktop: true, tablet: true, mobile: true }; 
-    if (typeof createVisibilityControls === 'function') {
+    if (typeof CommonSettings.createVisibilityControls === 'function') {
         visibilityContent.appendChild(
-            createVisibilityControls(currentVisibility, (newVisibility) => {
-                // TODO: עדכון שמירת Visibility תצטרך גם היא לקבל הקשר מקומי 
-                const currentBreakpoint = window.currentBreakpoint || 'desktop'; // << צריך לשנות
-                saveResponsiveSetting(elementData, ['visibility', currentBreakpoint], newVisibility[currentBreakpoint], updateCallback);
+            CommonSettings.createVisibilityControls(currentVisibility, (newVisibility, localBreakpointContext) => {
+                 // --- שינוי: הוספת localBreakpointContext כפרמטר רביעי --- 
+                 saveResponsiveSetting(elementData, ['config', 'visibility', localBreakpointContext], newVisibility[localBreakpointContext], localBreakpointContext, updateCallback);
+                 // --------------------------------------------------------
             })
         );
     } else {

@@ -85,17 +85,38 @@ function loadInitialContent() {
 
 // פונקציה לאיפוס פאנל ההגדרות
 function resetSettingsPanel() {
-    settingsPanelContent.innerHTML = '';
-    const emptyMessage = document.createElement('div');
-    emptyMessage.className = 'p-4 text-center';
-    emptyMessage.innerHTML = `
-        <div class="mb-4">
-            <i class="ri-settings-4-line text-4xl text-gray-300"></i>
-        </div>
-        <p class="text-gray-500 text-sm mb-2">בחר אלמנט לעריכה</p>
-        <p class="text-gray-400 text-xs">לחץ על אלמנט בעמוד כדי לערוך את ההגדרות שלו</p>
-    `;
-    settingsPanelContent.appendChild(emptyMessage);
+    console.log("Resetting settings panel (no element selected).");
+    selectedElement = null; // Clear selection state
+    
+    const tabsContainer = document.getElementById('settings-tabs-container');
+    const contentArea = document.getElementById('tab-content-area');
+    const placeholder = document.getElementById('settings-panel-placeholder');
+
+    if (tabsContainer) {
+        tabsContainer.classList.add('hidden');
+        console.log('resetSettingsPanel: Added hidden to settings-tabs-container. Has hidden class:', tabsContainer.classList.contains('hidden'));
+    } else {
+        console.error('resetSettingsPanel: Could not find settings-tabs-container!');
+    }
+    if (contentArea) {
+        contentArea.classList.add('hidden');
+    }
+    if (placeholder) {
+        placeholder.classList.remove('hidden');
+    }
+
+    // --- שינוי: ניקוי והסתרת כל פאנל טאב בנפרד במקום מחיקת הקונטיינר ---
+    const contentTabPanel = document.getElementById('tab-content-content');
+    const designTabPanel = document.getElementById('tab-content-design');
+    const advancedTabPanel = document.getElementById('tab-content-advanced');
+
+    if (contentTabPanel) { contentTabPanel.innerHTML = ''; contentTabPanel.style.display = 'none'; }
+    if (designTabPanel) { designTabPanel.innerHTML = ''; designTabPanel.style.display = 'none'; }
+    if (advancedTabPanel) { advancedTabPanel.innerHTML = ''; advancedTabPanel.style.display = 'none'; }
+    // ---------------------------------------------------------------------
+
+    // Optionally deactivate tabs visually
+    document.querySelectorAll('.settings-tabs .tab-button').forEach(btn => btn.dataset.active = 'false');
 }
 
 // Placeholder for validation
@@ -292,6 +313,25 @@ function handleElementSelectionRequest(event) {
     }
     console.log(`Element selected: ${selectedElement.type} - ${selectedElement.id}`);
 
+    // --- הוספה: הצגת אזורי הטאבים והסתרת ההודעה ---
+    const tabsContainer = document.getElementById('settings-tabs-container');
+    const contentArea = document.getElementById('tab-content-area');
+    const placeholder = document.getElementById('settings-panel-placeholder');
+
+    if (tabsContainer) {
+        tabsContainer.classList.remove('hidden');
+        console.log('handleElementSelectionRequest: Removed hidden from settings-tabs-container. Has hidden class:', tabsContainer.classList.contains('hidden'));
+    } else {
+        console.error('handleElementSelectionRequest: Could not find settings-tabs-container!');
+    }
+     if (contentArea) {
+        contentArea.classList.remove('hidden');
+    }
+    if (placeholder) {
+        placeholder.classList.add('hidden');
+    }
+    // -------------------------------------------------
+
     // Load settings for the selected element
     const currentTab = document.querySelector('.tab-button[data-active="true"]')?.dataset.tab || 'content';
     loadSettingsTabContent(currentTab);
@@ -299,10 +339,18 @@ function handleElementSelectionRequest(event) {
 
 // Populate the settings panel based on the selected element and tab
 function loadSettingsTabContent(tabName) {
+    // --- שינוי: קריאה ל-reset אם אין בחירה ---
     if (!selectedElement) {
-        resetSettingsPanel();
+        // שינוי: ודא שגם הטאבים ויזואלית לא פעילים
+        document.querySelectorAll('.settings-tabs .tab-button').forEach(btn => btn.dataset.active = 'false');
+        // ושהטאב content (או ברירת מחדל) פעיל אם פותחים את הפאנל
+        const contentTabButton = document.querySelector('.settings-tabs .tab-button[data-tab="content"]');
+        if(contentTabButton) contentTabButton.dataset.active = 'true';
+        
+        resetSettingsPanel(); 
         return;
     }
+    // ----------------------------------------
 
     const elementData = findElementData(pageState, selectedElement.id);
     if (!elementData) {
@@ -338,8 +386,11 @@ function loadSettingsTabContent(tabName) {
     activeTabPanel.style.display = 'block';
     activeTabPanel.innerHTML = ''; // Clear previous content
 
-    // Define the update callback
-    const updateCallback = () => {
+    // Define the update callback function used by settings controls
+    // --- שינוי: קבלת updatedElementData כפרמטר --- 
+    const updateCallback = (updatedElementData) => {
+        console.log('[UpdateCallback] Received updatedElementData:', JSON.stringify(updatedElementData));
+
         // הערה: saveResponsiveSetting כבר עדכן את ה-elementData המקורי
         // שמוחזק ב-pageState, אז אנחנו לא צריכים לקרוא לו שוב כאן.
 
@@ -347,99 +398,117 @@ function loadSettingsTabContent(tabName) {
         let targetElementId = selectedElement ? selectedElement.id : null;
         let changedColumnData = null;
 
-        if (selectedElement && selectedElement.type === 'column') {
-            const currentElementData = findElementData(pageState, selectedElement.id);
-            const rowData = findRowContainingElement(pageState, selectedElement.id);
-            
-            if (currentElementData && rowData && rowData.columns && rowData.columns.length > 1) {
-                // --- הוספה: לוגיקת התאמת רוחב עמודות אחיות ---
-                console.log('Adjusting sibling column widths...');
-                changedColumnData = currentElementData;
+        // --- שינוי: שימוש ב-updatedElementData אם קיים, אחרת חפש ---
+        const elementDataForCallback = updatedElementData || (targetElementId ? findElementData(pageState, targetElementId) : null);
+        if (!elementDataForCallback) {
+            console.warn('[UpdateCallback] Could not get element data.');
+            return; 
+        }
+        // ---------------------------------------------------------
+
+        // --- הוספה: לוגיקת התאמת רוחב עמודות אחיות (מצריכה חשיבה מחדש אם משתמשים ב-updatedElementData) ---
+        // *** הערה: הלוגיקה הזו מניחה שאנחנו מטפלים בשינוי רוחב עמודה.
+        // היא צריכה לקבל את המידע על השורה מהעמודה ששונתה.
+        // כרגע, היא עלולה לפעול גם כשמשנים הגדרה אחרת.
+        if (elementDataForCallback.type === 'column') { // הפעל רק אם האלמנט הוא עמודה
+            const rowData = findRowContainingElement(pageState, elementDataForCallback.id);
+            if (rowData && rowData.columns && rowData.columns.length > 1) {
+                console.log('Adjusting sibling column widths (using updatedElementData)');
+                changedColumnData = elementDataForCallback; // העמודה ששונתה
                 const changedColumnId = changedColumnData.id;
-                const currentWidth = parseFloat(changedColumnData.config?.widthPercent || (100 / rowData.columns.length));
+                
+                // --- קבלת הרוחב האפקטיבי של העמודה ששונתה --- 
+                const currentEffectiveConfig = Render.getEffectiveConfig(changedColumnData, getCurrentBreakpoint());
+                const currentWidth = parseFloat(currentEffectiveConfig.widthPercent || (100 / rowData.columns.length));
+                console.log(`   Changed column (${changedColumnId}) effective width: ${currentWidth}%`);
+                // ---------------------------------------------------
 
                 const otherColumns = rowData.columns.filter(c => c.id !== changedColumnId);
                 let totalWidthOfOthersBeforeChange = 0;
+
                 otherColumns.forEach(col => {
-                    // חישוב מחדש של הקונפיג האפקטיבי *לפני* השינוי עבור השכנות
-                    // (אולי עדיף לשמור את המצב הקודם? כרגע נשתמש בערך הנוכחי)
-                    const effectiveSiblingConfig = Render.getEffectiveConfig(col, getCurrentBreakpoint()); // השתמש בפונקציה המיובאת
+                    const effectiveSiblingConfig = Render.getEffectiveConfig(col, getCurrentBreakpoint());
+                    // חשוב: החישוב הזה צריך לשקף את הרוחב *לפני* השינוי
+                    // כרגע זה לא מדויק לחלוטין כי pageState כבר עודכן ברוחב החדש
+                    // לחישוב מדויק, היינו צריכים לשמור את הרוחב הקודם איפשהו.
+                    // נשאיר כרגע לצורך התקדמות, אך יש פה נקודה לשיפור.
                     totalWidthOfOthersBeforeChange += parseFloat(effectiveSiblingConfig.widthPercent || (100 / rowData.columns.length));
                 });
+                console.log(`   Total width of others before (estimated): ${totalWidthOfOthersBeforeChange}%`);
 
                 const remainingWidth = 100 - currentWidth;
                 let distributedWidthSum = 0;
                 const minAllowedWidth = 5;
-                const maxAllowedWidth = 95; // Assume max 95 if more than one column
+                const maxAllowedWidth = 95;
 
-                otherColumns.forEach((col, index) => {
-                    const effectiveSiblingConfig = Render.getEffectiveConfig(col, getCurrentBreakpoint()); // קבל שוב
+                otherColumns.forEach((col) => {
+                    const effectiveSiblingConfig = Render.getEffectiveConfig(col, getCurrentBreakpoint());
                     const originalOtherWidth = parseFloat(effectiveSiblingConfig.widthPercent || (100 / rowData.columns.length));
-                    let newOtherWidth = (totalWidthOfOthersBeforeChange > 0) 
+                    let newOtherWidth = (totalWidthOfOthersBeforeChange > 0)
                                         ? (originalOtherWidth / totalWidthOfOthersBeforeChange) * remainingWidth
-                                        : (100 / otherColumns.length); // Fallback if total was 0
+                                        : (100 / otherColumns.length);
 
                     newOtherWidth = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, newOtherWidth));
                     
-                    // שמור את הרוחב החדש ישירות ב-config הבסיסי של העמודה האחות
-                    // (או ב-override המתאים אם אנחנו לא בדסקטופ? כרגע מפשט ושומר בבסיס)
                     // *** תיקון נדרש כאן: השמירה צריכה להיות רספונסיבית גם לשכנות ***
-                    // *** לעת עתה, נשמור רק לבסיס לצורך התקדמות ***
+                    // צריך לקרוא ל-saveResponsiveSetting עבור כל עמודה אחות!
+                    // שמירה ישירה לבסיס תדרוס overrides.
+                    console.log(` -> Calculated new width for sibling ${col.id}: ${newOtherWidth.toFixed(2)}%`);
+                    // שינוי זמני: נשמור לבסיס רק כדי לראות אם העדכון עובד
                     if (!col.config) col.config = {};
                     col.config.widthPercent = newOtherWidth.toFixed(2);
-                    console.log(` -> Adjusted sibling ${col.id} base width to ${col.config.widthPercent}%`);
+                     console.log(`    (Temporarily saving to base config)`);
+                    // --------------------------------------------------
                     
                     distributedWidthSum += newOtherWidth;
-                    stylesNeedReapply = true; // צריך לרנדר מחדש את השכנות
+                    stylesNeedReapply = true;
                 });
 
-                // Adjust the last column slightly for rounding errors
                 const finalAdjustment = remainingWidth - distributedWidthSum;
                 if (Math.abs(finalAdjustment) > 0.1 && otherColumns.length > 0) {
                     const lastOtherCol = otherColumns[otherColumns.length - 1];
                     if (lastOtherCol.config) {
                         let lastOtherWidth = parseFloat(lastOtherCol.config.widthPercent) + finalAdjustment;
-                        lastOtherWidth = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, lastOtherWidth)); 
+                        lastOtherWidth = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, lastOtherWidth));
                         lastOtherCol.config.widthPercent = lastOtherWidth.toFixed(2);
-                         console.log(` -> Final adjustment for sibling ${lastOtherCol.id} to ${lastOtherCol.config.widthPercent}%`);
+                        console.log(` -> Final adjustment for sibling ${lastOtherCol.id} to ${lastOtherCol.config.widthPercent}% (base)`);
                     }
                 }
-                // --- סוף לוגיקת התאמה ---
             }
         }
+        // --- סוף לוגיקת התאמה ---
 
         // שמירת המצב המעודכן (כולל שינויים בשכנות אם היו)
         savePageState();
 
         // הרצת עדכון ויזואלי
         if (targetElementId) {
-            const currentElementData = findElementData(pageState, targetElementId); 
-            if (currentElementData) {
-                const elementNode = document.querySelector(`[data-element-id="${targetElementId}"]`);
-                if (elementNode) {
-                    console.log('Update Callback: Re-applying styles to element:', targetElementId);
-                    Render.applyStylesToElement(elementNode, currentElementData); // עדכון האלמנט שנבחר
+            // --- שינוי: שימוש ב-elementDataForCallback --- 
+            const elementNode = document.querySelector(`[data-element-id="${targetElementId}"]`);
+            if (elementNode) {
+                console.log('Update Callback: Re-applying styles to element:', targetElementId);
+                Render.applyStylesToElement(elementNode, elementDataForCallback);
+                // -------------------------------------------
 
-                    // עדכון שכנות אם הרוחב השתנה
-                    if (stylesNeedReapply && changedColumnData) {
-                         const rowData = findRowContainingElement(pageState, changedColumnData.id);
-                         if (rowData && rowData.columns) {
-                            console.log('Applying styles to updated sibling columns in row:', rowData.id);
-                            rowData.columns.forEach(col => {
-                                if (col.id !== changedColumnData.id) { // רק השכנות
-                                    const colNode = document.querySelector(`[data-element-id="${col.id}"]`);
-                                    if (colNode) {
-                                        Render.applyStylesToElement(colNode, col);
-                                    }
+                // עדכון שכנות אם הרוחב השתנה
+                if (stylesNeedReapply && changedColumnData) {
+                    const rowData = findRowContainingElement(pageState, changedColumnData.id);
+                    if (rowData && rowData.columns) {
+                        console.log('Applying styles to updated sibling columns in row:', rowData.id);
+                        rowData.columns.forEach(col => {
+                            if (col.id !== changedColumnData.id) { 
+                                const colNode = document.querySelector(`[data-element-id="${col.id}"]`);
+                                if (colNode) {
+                                    // --- שינוי: העברת נתוני העמודה האחות המעודכנים מה-pageState --- 
+                                    Render.applyStylesToElement(colNode, col);
+                                    // -----------------------------------------------------------
                                 }
-                            });
-                         }
+                            }
+                        });
                     }
-                } else {
-                    console.warn('Update Callback: Could not find element node for style update.');
                 }
             } else {
-                 console.warn('Update Callback: Could not find element data for style update.');
+                console.warn('Update Callback: Could not find element node for style update.');
             }
         }
     };
@@ -915,6 +984,9 @@ function initBuilder() {
     initSortables();
 
     console.log('Builder initialized.');
+    // --- הוספה: וידוא איפוס פאנל ההגדרות בטעינה ראשונית --- 
+    resetSettingsPanel();
+    // ----------------------------------------------------
 }
 
 document.addEventListener('DOMContentLoaded', initBuilder);

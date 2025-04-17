@@ -13,40 +13,56 @@ console.log('Render Responsive module loaded');
  * @returns {object} אובייקט הקונפיגורציה האפקטיבי המלא
  */
 export function getEffectiveConfig(elementData, breakpoint) {
+    // console.log(`[getEffectiveConfig] Called for Element ID: ${elementData?.id}, Breakpoint: ${breakpoint}`);
+    // console.log(`   Received elementData.config.responsiveOverrides:`, JSON.stringify(elementData?.config?.responsiveOverrides));
+
     if (!elementData || !elementData.config) {
-        console.warn('getEffectiveConfig: Missing elementData or config');
+        // console.warn('getEffectiveConfig: Missing elementData or config');
         return {};
     }
 
     const baseConfig = deepClone(elementData.config); 
     const overrides = elementData.config.responsiveOverrides || {};
-
     delete baseConfig.responsiveOverrides;
     
-    let mergedConfig = deepClone(baseConfig); // התחל מהבסיס
+    let mergedConfig = deepClone(baseConfig);
+    // console.log(`   [getEffectiveConfig] Initial mergedConfig (base clone):`, JSON.stringify(mergedConfig));
 
-    // --- שינוי: החל את הדריסות בסדר הנכון --- 
-    // 1. החל דריסת Desktop תמיד (כדי ש-Tablet/Mobile יוכלו לרשת ממנה)
-    if (overrides.desktop) {
-        mergedConfig = deepMerge(mergedConfig, deepClone(overrides.desktop));
-    }
-    
-    // 2. החל דריסת Tablet אם אנחנו ב-Tablet או Mobile
+    const applyOverrides = (breakpointKey) => {
+        if (overrides[breakpointKey]) {
+            // console.log(`   [getEffectiveConfig] Applying ${breakpointKey} overrides:`, JSON.stringify(overrides[breakpointKey]));
+            const walkOverrides = (source, path) => {
+                Object.keys(source).forEach(key => {
+                    const currentPath = [...path, key];
+                    const sourceValue = source[key];
+                    if (typeof sourceValue === 'object' && sourceValue !== null && !Array.isArray(sourceValue)) {
+                         if (getNestedValue(mergedConfig, currentPath) === undefined) {
+                             setNestedValue(mergedConfig, currentPath, {});
+                        }
+                        walkOverrides(sourceValue, currentPath);
+                    } else {
+                        // console.log(`      -> Setting path ${currentPath.join('.')} to ${JSON.stringify(sourceValue)}`);
+                        setNestedValue(mergedConfig, currentPath, deepClone(sourceValue)); 
+                    }
+                });
+            };
+            walkOverrides(overrides[breakpointKey], []); 
+        }
+    };
+
+    applyOverrides('desktop');
+    // console.log(`   [getEffectiveConfig] mergedConfig AFTER Desktop apply:`, JSON.stringify(mergedConfig));
+
     if (breakpoint === 'tablet' || breakpoint === 'mobile') {
-        if (overrides.tablet) {
-            mergedConfig = deepMerge(mergedConfig, deepClone(overrides.tablet));
-        }
+        applyOverrides('tablet');
+        // console.log(`   [getEffectiveConfig] mergedConfig AFTER Tablet apply:`, JSON.stringify(mergedConfig));
     }
-
-    // 3. החל דריסת Mobile אם אנחנו ב-Mobile
     if (breakpoint === 'mobile') {
-        if (overrides.mobile) {
-            mergedConfig = deepMerge(mergedConfig, deepClone(overrides.mobile));
-        }
+        applyOverrides('mobile');
+        // console.log(`   [getEffectiveConfig] mergedConfig AFTER Mobile apply:`, JSON.stringify(mergedConfig));
     }
-    // --- סוף שינוי ---
 
-    // console.log(`getEffectiveConfig for ${elementData.id} at ${breakpoint}:`, mergedConfig);
+    // console.log(`   [getEffectiveConfig] FINAL mergedConfig being returned:`, JSON.stringify(mergedConfig));
     return mergedConfig;
 }
 
@@ -104,11 +120,21 @@ export function getSettingOverrideStatus(elementData, settingPath) {
  */
 export function saveResponsiveSetting(elementData, settingPath, newValue, breakpoint, updateCallback) {
     if (!elementData || !elementData.config) {
-        console.error('saveResponsiveSetting: Missing elementData or config');
+        // console.error('saveResponsiveSetting: Missing elementData or config');
         return;
     }
 
-    console.log(`Saving setting [${settingPath.join('.')}] = ${JSON.stringify(newValue)} for explicit breakpoint: ${breakpoint}`);
+    // console.log(`Saving setting [${settingPath.join('.')}] = ${JSON.stringify(newValue)} for explicit breakpoint: ${breakpoint}`);
+
+    let pathForOverride = [...settingPath];
+    if (pathForOverride.length > 0 && pathForOverride[0] === 'config') {
+        pathForOverride.shift(); 
+        // console.log(`   Adjusted override path (removed leading 'config'): ${pathForOverride.join('.')}`);
+    } else if (pathForOverride.length > 0 && pathForOverride[0] === 'styles') {
+        // console.log(`   Override path for styles remains: ${pathForOverride.join('.')}`);
+    } else {
+        // console.log(`   Override path remains: ${pathForOverride.join('.')}`);
+    }
 
     // Ensure responsiveOverrides exists
     if (!elementData.config.responsiveOverrides) {
@@ -118,42 +144,89 @@ export function saveResponsiveSetting(elementData, settingPath, newValue, breakp
         elementData.config.responsiveOverrides[breakpoint] = {};
     }
 
+    // --- שינוי: שימוש ב-settingPath המקורי להשוואה --- 
     let comparisonValue;
     let comparisonSourceBreakpoint;
 
     if (breakpoint === 'desktop') {
-        comparisonValue = getNestedValue(elementData.config, settingPath);
+        // השווה מול הערך הבסיסי (שנמצא ב-elementData.config ישירות)
+        comparisonValue = getNestedValue(elementData.config, settingPath); // השתמש בנתיב המקורי
         comparisonSourceBreakpoint = 'base';
     } else {
+        // השווה מול הברייקפוינט הקודם
         comparisonSourceBreakpoint = (breakpoint === 'mobile') ? 'tablet' : 'desktop';
         const parentEffectiveConfig = getEffectiveConfig(elementData, comparisonSourceBreakpoint);
-        comparisonValue = getNestedValue(parentEffectiveConfig, settingPath);
+        // חשוב: גם כאן, השתמש ב-settingPath המקורי כדי לקרוא את הערך מהקונפיג האפקטיבי
+        comparisonValue = getNestedValue(parentEffectiveConfig, settingPath); // השתמש בנתיב המקורי
     }
+    // --------------------------------------------------
 
     const valuesAreEqual = JSON.stringify(newValue) === JSON.stringify(comparisonValue);
-    const overridePath = [breakpoint, ...settingPath];
+    
+    // --- שינוי: שימוש ב-pathForOverride לשמירה/מחיקה ב-override --- 
+    const finalOverridePathInBreakpoint = [breakpoint, ...pathForOverride]; // Use adjusted path
 
     if (!valuesAreEqual) {
-        setNestedValue(elementData.config.responsiveOverrides, overridePath, newValue);
-        console.log(` -> Saved override at ${breakpoint} because value differs from ${comparisonSourceBreakpoint} (${JSON.stringify(comparisonValue)})`);
+        setNestedValue(elementData.config.responsiveOverrides, finalOverridePathInBreakpoint, newValue);
+        // console.log(` -> Saved override at ${breakpoint}.${pathForOverride.join('.')} because value differs from ${comparisonSourceBreakpoint} (${JSON.stringify(comparisonValue)})`);
     } else {
-        deleteNestedValue(elementData.config.responsiveOverrides, overridePath);
-        console.log(` -> Removed override at ${breakpoint} because value matches ${comparisonSourceBreakpoint} (${JSON.stringify(comparisonValue)})`);
+        deleteNestedValue(elementData.config.responsiveOverrides, finalOverridePathInBreakpoint);
+        // console.log(` -> Removed override at ${breakpoint}.${pathForOverride.join('.')} because value matches ${comparisonSourceBreakpoint} (${JSON.stringify(comparisonValue)})`);
     }
+    // ----------------------------------------------------------
 
-    if (elementData.config.responsiveOverrides[breakpoint] && Object.keys(elementData.config.responsiveOverrides[breakpoint]).length === 0) {
+    // Cleanup empty override objects
+    // --- שינוי: בדיקה של האובייקט ב-override לפי pathForOverride --- 
+    // פונקצית עזר לבדיקת אובייקט ריק רקורסיבית (רק לניקוי)
+    const isEmptyRecursive = (obj) => {
+        if (typeof obj !== 'object' || obj === null) return false; // לא אובייקט
+        for (const key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                if (typeof obj[key] === 'object' && obj[key] !== null) {
+                    if (!isEmptyRecursive(obj[key])) return false; // מצא משהו לא ריק בפנים
+                } else {
+                     return false; // מצא משהו לא אובייקט/לא ריק
+                }
+            }
+        }
+        return true; // הכל ריק
+    };
+    
+    // פונקציית עזר למחיקה רקורסיבית של אובייקטים ריקים מהסוף
+    const cleanupEmptyObjects = (obj, path) => {
+        if (path.length === 0) return; // הגענו לשורש
+        
+        let current = obj;
+        for (let i = 0; i < path.length - 1; i++) {
+            if (current[path[i]] === undefined || typeof current[path[i]] !== 'object') {
+                return; // הנתיב לא קיים, אין מה לנקות
+            }
+            current = current[path[i]];
+        }
+
+        const finalKey = path[path.length - 1];
+        if (current[finalKey] !== undefined && typeof current[finalKey] === 'object' && isEmptyRecursive(current[finalKey])) {
+            // console.log(`   -> Cleaning up empty object at: ${path.join('.')}`);
+            delete current[finalKey];
+            cleanupEmptyObjects(obj, path.slice(0, -1)); 
+        }
+    };
+
+    // נקה את הנתיב המלא שנוצר אולי ב-override
+    cleanupEmptyObjects(elementData.config.responsiveOverrides, finalOverridePathInBreakpoint); 
+    
+    // נקה גם את אובייקט הברייקפוינט כולו אם הוא ריק
+    if (elementData.config.responsiveOverrides[breakpoint] && isEmptyRecursive(elementData.config.responsiveOverrides[breakpoint])) {
+        // console.log(`   -> Cleaning up empty breakpoint object: ${breakpoint}`);
         delete elementData.config.responsiveOverrides[breakpoint];
     }
-    if (breakpoint === 'desktop') {
-        if (elementData.config.responsiveOverrides.tablet && Object.keys(elementData.config.responsiveOverrides.tablet).length === 0) {
-            delete elementData.config.responsiveOverrides.tablet;
-        }
-        if (elementData.config.responsiveOverrides.mobile && Object.keys(elementData.config.responsiveOverrides.mobile).length === 0) {
-            delete elementData.config.responsiveOverrides.mobile;
-        }
-    }
+    // -------------------------------------------------------------
 
-    updateCallback();
+    // Call the update callback if provided, passing the updated data
+    if (typeof updateCallback === 'function') {
+        // console.log('[SaveResponsiveSetting] Calling updateCallback AFTER saving state (with updated elementData)');
+        updateCallback(elementData);
+    }
 }
 
 
@@ -233,7 +306,7 @@ function deepClone(obj) {
     try {
         return JSON.parse(JSON.stringify(obj));
     } catch (e) {
-        console.error("Deep clone failed:", e);
+        // console.error("Deep clone failed:", e);
         return {}; // החזר אובייקט ריק במקרה של שגיאה
     }
 }
