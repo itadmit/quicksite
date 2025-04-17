@@ -9,7 +9,8 @@ import {
     createNumberInput, 
     createSelect,
     createSlider,
-    createButtonGroup 
+    createButtonGroup,
+    createVisibilityControls
 } from './common-settings.js';
 
 // --- הוספה: ייבוא פונקציית שמירה רספונסיבית ---
@@ -351,29 +352,16 @@ export function populateColumnAdvancedTab(panel, elementData, effectiveConfig, u
 
     // --- Margin Section ---
     const { accordionItem: marginAccordion, contentDiv: marginContent } = createSettingsGroup('שוליים (Margin)');
-    const marginLabels = [
-        { key: 'top', label: 'עליון', placeholder: '0' },
-        { key: 'right', label: 'ימין', placeholder: '0' },
-        { key: 'bottom', label: 'תחתון', placeholder: '0' },
-        { key: 'left', label: 'שמאל', placeholder: '0' }
-    ];
-    const marginSettingPath = ['styles', 'margin']; // נתיב ההגדרה
+    const marginSettingPath = ['styles', 'margin'];
     const effectiveMargin = config.styles?.margin || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
-    const marginOverrideStatus = getSettingOverrideStatus(elementData, marginSettingPath);
+    
     marginContent.appendChild(createLinkedInputs(
-        marginLabels, 
-        effectiveMargin, 
-        effectiveMargin.unit || 'px', 
-        true, 
-        (newValue, localBreakpointContext) => { 
-            saveResponsiveSetting(elementData, marginSettingPath, newValue, localBreakpointContext, updateCallback);
-        },
-        true, // isResponsive
-        marginOverrideStatus,
-        // --- הוספה: העברת הקולבק לטעינה והנתיב ---
-        (breakpoint) => fetchSettingValue(breakpoint, marginSettingPath),
-        marginSettingPath
-        // ------------------------------------------
+        'שוליים',
+        elementData,
+        marginSettingPath,
+        ['px', '%', 'em', 'rem'],
+        effectiveMargin.unit || 'px',
+        updateCallback
     ));
     panel.appendChild(marginAccordion);
 
@@ -419,34 +407,56 @@ export function populateColumnAdvancedTab(panel, elementData, effectiveConfig, u
 
     // --- Custom Identifiers Section ---
     const { accordionItem: idClassAccordion, contentDiv: idClassContent } = createSettingsGroup('מזהים וקלאסים');
-    const idContainer = document.createElement('div'); idContainer.className = 'mb-3';
-    idContainer.appendChild(createTextInput('Custom ID', config.customId, (value) => {
-        elementData.config.customId = value.replace(/[^a-zA-Z0-9-_]/g, '').trim();
-        // No callback needed for ID usually
-    }, 'my-unique-col-id'));
-    idClassContent.appendChild(idContainer);
     
-    const classContainer = document.createElement('div'); classContainer.className = 'mb-3';
-    classContainer.appendChild(createTextInput('Custom CSS Classes', config.customClass, (value) => {
-        elementData.config.customClass = value.replace(/[^a-zA-Z0-9-_\s]/g, '').trim();
-        updateCallback(); // Rerender needed for classes
-    }, 'my-col-class another-class'));
-    idClassContent.appendChild(classContainer);
+    // Custom ID
+    const idLabel = document.createElement('label');
+    idLabel.className = 'block text-sm text-gray-600 mb-1';
+    idLabel.textContent = 'Custom ID';
+    idClassContent.appendChild(idLabel);
+    idClassContent.appendChild(createTextInput(
+        config.customId, // 1. value
+        'my-unique-col-id', // 2. placeholder
+        null, // 3. unit (none)
+        (value) => { // 4. changeCallback
+            const newId = value.replace(/[^a-zA-Z0-9-_]/g, '').trim();
+            // --- שינוי: קריאה ל-saveResponsiveSetting --- 
+            saveResponsiveSetting(elementData, ['config', 'customId'], newId, getCurrentBreakpoint(), updateCallback);
+            // -------------------------------------------
+        }
+    ));
+    
+    // Custom CSS Classes
+    const classLabel = document.createElement('label');
+    classLabel.className = 'block text-sm text-gray-600 mb-1 mt-3'; // Added mt-3
+    classLabel.textContent = 'Custom CSS Classes';
+    idClassContent.appendChild(classLabel);
+    idClassContent.appendChild(createTextInput(
+        config.customClass, // 1. value
+        'my-col-class another-class', // 2. placeholder
+        null, // 3. unit (none)
+        (value) => { // 4. changeCallback
+            const newClasses = value.replace(/[^a-zA-Z0-9-_\s]/g, '').trim();
+            // --- שינוי: קריאה ל-saveResponsiveSetting --- 
+            saveResponsiveSetting(elementData, ['config', 'customClass'], newClasses, getCurrentBreakpoint(), updateCallback);
+            // -------------------------------------------
+        }
+    ));
+    // ---------------------------------------------------------
+    
     panel.appendChild(idClassAccordion);
 
     // --- Visibility Section (Responsive) ---
     const { accordionItem: visibilityAccordion, contentDiv: visibilityContent } = createSettingsGroup('נראות (Visibility)');
     const currentVisibility = elementData.config.visibility || { desktop: true, tablet: true, mobile: true }; 
-    if (typeof CommonSettings.createVisibilityControls === 'function') {
+    if (typeof createVisibilityControls === 'function') {
         visibilityContent.appendChild(
-            CommonSettings.createVisibilityControls(currentVisibility, (newVisibility, localBreakpointContext) => {
-                 // --- שינוי: הוספת localBreakpointContext כפרמטר רביעי --- 
+            createVisibilityControls(currentVisibility, (newVisibility, localBreakpointContext) => {
                  saveResponsiveSetting(elementData, ['config', 'visibility', localBreakpointContext], newVisibility[localBreakpointContext], localBreakpointContext, updateCallback);
-                 // --------------------------------------------------------
             })
         );
     } else {
-       // ... (error handling)
+       console.error('createVisibilityControls function not found in common-settings.js');
+       visibilityContent.textContent = 'שגיאה בטעינת פקד הנראות.';
     }
     panel.appendChild(visibilityAccordion);
 }
