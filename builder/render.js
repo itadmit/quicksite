@@ -405,15 +405,15 @@ function renderColumn(columnData, totalColumnsInRow, columnIndex, effectiveConfi
 }
 
 // Function to render a single widget
-// --- שינוי: קבלת effectiveConfig כפרמטר --- 
 function renderWidget(widgetData, effectiveConfig) {
+    
     // const config = widgetData.config || {}; // לא בשימוש ישיר
     const config = effectiveConfig;
 
     const widgetWrapper = document.createElement('div');
-    widgetWrapper.className = 'widget-wrapper relative mb-4'; // מרווח ברירת מחדל
+    widgetWrapper.className = 'widget-wrapper relative mb-4';
     widgetWrapper.dataset.widgetId = widgetData.id;
-    widgetWrapper.dataset.elementId = widgetData.id; // For selection
+    widgetWrapper.dataset.elementId = widgetData.id;
     widgetWrapper.dataset.widgetType = widgetData.type;
 
     // Apply custom ID and Class if present in effectiveConfig
@@ -445,12 +445,11 @@ function renderWidget(widgetData, effectiveConfig) {
     applyStylesToElement(widgetWrapper, widgetData);
     // -------------------------------------------------
     
-    // Add controls (edit, duplicate, delete)
+    // Add controls (edit, duplicate, delete) - DIRECT REFERENCE TO THE CURRENT WIDGET DATA
     addWidgetControls(widgetWrapper, widgetData);
 
-    // Add event listener for selection
-    widgetWrapper.addEventListener('click', (e) => {
-        // Prevent selection if clicking on a control button
+    // Add event listener for selection - USE THE WIDGET'S SPECIFIC ID
+    widgetWrapper.addEventListener('click', function(e) {
         if (!e.target.closest('.widget-toolbar-button')) {
             selectElement('widget', widgetData.id);
         }
@@ -459,68 +458,74 @@ function renderWidget(widgetData, effectiveConfig) {
     return widgetWrapper;
 }
 
-// פונקציה להוספת כפתורי פעולה לווידג'ט - שיפור העיצוב
-function addWidgetControls(widgetWrapper, widgetData) {
-    // יצירת סרגל כלים עם עיצוב משופר
-    const toolbar = document.createElement('div');
-    // שינוי: הסרת group-hover, הוספת קלאס ייעודי לשליטה עם JS
-    toolbar.className = 'widget-toolbar absolute -top-3 left-1 opacity-0 transition-opacity flex bg-white shadow-md rounded-full border border-gray-200 z-30';
 
-    // כפתור עריכה
+// פונקציה להוספת כפתורי פעולה לווידג'ט - שיפור העיצוב וההיגיון
+function addWidgetControls(widgetWrapper, widgetData) {
+    // Remove any existing toolbar first to avoid duplicates
+    const existingToolbar = widgetWrapper.querySelector('.widget-toolbar');
+    if (existingToolbar) {
+        existingToolbar.remove();
+    }
+    
+    // Create a fresh toolbar with unique ID
+    const toolbar = document.createElement('div');
+    toolbar.className = 'widget-toolbar';
+    toolbar.id = `toolbar-${widgetData.id}`; // Unique ID for this toolbar
+    
+    // Create buttons with direct widget ID reference stored on them
     const editButton = document.createElement('button');
-    editButton.className = 'p-2 text-sm text-gray-500 hover:text-primary-600 hover:bg-gray-50 rounded-l-full';
+    editButton.className = 'widget-toolbar-button';
+    editButton.dataset.action = 'edit';
+    editButton.dataset.targetWidget = widgetData.id; // Store target widget ID
     editButton.innerHTML = '<i class="ri-edit-line"></i>';
     editButton.title = 'ערוך';
-    editButton.dataset.action = 'edit';
-
-    // כפתור שכפול
+    
     const duplicateButton = document.createElement('button');
-    duplicateButton.className = 'p-2 text-sm text-gray-500 hover:text-primary-600 hover:bg-gray-50';
+    duplicateButton.className = 'widget-toolbar-button';
+    duplicateButton.dataset.action = 'duplicate';
+    duplicateButton.dataset.targetWidget = widgetData.id; // Store target widget ID
     duplicateButton.innerHTML = '<i class="ri-file-copy-line"></i>';
     duplicateButton.title = 'שכפל';
-    duplicateButton.dataset.action = 'duplicate';
-
-    // כפתור מחיקה
+    
     const deleteButton = document.createElement('button');
-    deleteButton.className = 'p-2 text-sm text-gray-500 hover:text-red-500 hover:bg-gray-50 rounded-r-full';
+    deleteButton.className = 'widget-toolbar-button';
+    deleteButton.dataset.action = 'delete';
+    deleteButton.dataset.targetWidget = widgetData.id; // Store target widget ID
     deleteButton.innerHTML = '<i class="ri-delete-bin-line"></i>';
     deleteButton.title = 'מחק';
-    deleteButton.dataset.action = 'delete';
-
-    // הוספת הכפתורים לסרגל
+    
+    // Add explicit click handlers that read the widget ID from the button's data attribute
+    editButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const targetId = this.dataset.targetWidget;
+        console.log(`Edit button clicked for widget: ${targetId}`);
+        selectElement('widget', targetId);
+    });
+    
+    duplicateButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const targetId = this.dataset.targetWidget;
+        console.log(`Duplicate button clicked for widget: ${targetId}`);
+        duplicateWidget(targetId);
+    });
+    
+    deleteButton.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const targetId = this.dataset.targetWidget;
+        console.log(`Delete button clicked for widget: ${targetId}`);
+        deleteWidget(targetId);
+    });
+    
+    // Append buttons to toolbar
     toolbar.appendChild(editButton);
     toolbar.appendChild(duplicateButton);
     toolbar.appendChild(deleteButton);
-
-    // הוספת אירועי לחיצה (נשארים זהים)
-    editButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const widget = widgetWrapper.querySelector('.widget');
-        if (widget) widget.click(); // Select the widget
-    });
-    duplicateButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        duplicateWidget(widgetData.id);
-    });
-    deleteButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        deleteWidget(widgetData.id);
-    });
-
-    // הוספת הסרגל לתוך ה-wrapper של הווידג'ט
+    
+    // Append toolbar to widget wrapper
     widgetWrapper.appendChild(toolbar);
-
-    // שינוי: הסרת קלאס group מ-wrapper
-    // widgetWrapper.classList.add('group', 'rounded-md'); // Remove group class
-    widgetWrapper.classList.add('rounded-md'); // Keep rounded style
-
-    // שינוי: הוספת מאזיני אירועים להופעת/הסתרת סרגל הכלים
-    widgetWrapper.addEventListener('mouseenter', () => {
-        toolbar.style.opacity = '1';
-    });
-    widgetWrapper.addEventListener('mouseleave', () => {
-        toolbar.style.opacity = '0';
-    });
+    
+    // Add a custom data attribute to the widget wrapper for targeting
+    widgetWrapper.dataset.hasToolbar = 'true';
 }
 
 // פונקציה לשכפול ווידג'ט

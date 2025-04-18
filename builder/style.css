@@ -768,3 +768,70 @@ input[type="color"] {
     background-color: #1a1a1a;
     color: white;
 }
+
+
+/* --- Toolbar Fix --- */
+/* New isolated toolbar styles to replace hover dependency */
+.widget-wrapper {
+    position: relative;
+}
+
+.widget-toolbar {
+    position: absolute;
+    top: -10px;
+    left: 10px;
+    background-color: white;
+    border-radius: 20px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    border: 1px solid #e2e8f0;
+    display: flex;
+    opacity: 0; /* Hidden by default */
+    transition: opacity 0.2s;
+    z-index: 40;
+    pointer-events: all; /* Ensure clicks work */
+}
+
+/* Self-contained hover effect that doesn't rely on parent */
+.widget-wrapper:hover > .widget-toolbar {
+    opacity: 1 !important;
+}
+
+/* Toolbar Buttons */
+.widget-toolbar-button {
+    padding: 6px 8px;
+    background: none;
+    border: none;
+    color: #4a5568;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.widget-toolbar-button:first-child {
+    border-top-left-radius: 20px;
+    border-bottom-left-radius: 20px;
+}
+
+.widget-toolbar-button:last-child {
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+}
+
+.widget-toolbar-button:hover {
+    background-color: #f0f4f8;
+    color: #3182ce;
+}
+
+/* Edit button - specific styling */
+.widget-toolbar-button[data-action="edit"]:hover {
+    color: #3182ce;
+}
+
+/* Duplicate button - specific styling */
+.widget-toolbar-button[data-action="duplicate"]:hover {
+    color: #3182ce;
+}
+
+/* Delete button - specific styling */
+.widget-toolbar-button[data-action="delete"]:hover {
+    color: #e53e3e;
+}

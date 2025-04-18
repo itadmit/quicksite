@@ -351,6 +351,17 @@ function loadSettingsTabContent(tabName) {
         return;
     }
     // ----------------------------------------
+    document.querySelectorAll('.tab-button').forEach(tab => {
+        // הסר את הסטיילינג הפעיל מכל הלשוניות
+        tab.classList.remove('bg-primary-50', 'text-primary-600');
+        tab.classList.add('text-gray-500', 'hover:text-gray-700');
+        
+        // סמן את הלשונית המתאימה כפעילה
+        if (tab.dataset.tab === tabName) {
+            tab.classList.add('bg-primary-50', 'text-primary-600');
+            tab.classList.remove('text-gray-500', 'hover:text-gray-700');
+        }
+    });
 
     const elementData = findElementData(pageState, selectedElement.id);
     if (!elementData) {
@@ -1053,25 +1064,7 @@ function initializeWidgetControls(widget) {
     widgetWrapper.appendChild(toolbar);
 }
 
-function duplicateWidget(widget) {
-    const widgetId = widget.dataset.widgetId;
-    const widgetData = getWidgetById(widgetId);
-    if (!widgetData) return;
-    
-    // יצירת העתק עמוק של נתוני הווידג'ט
-    const newWidgetData = JSON.parse(JSON.stringify(widgetData));
-    newWidgetData.id = generateUniqueId(); // יצירת מזהה חדש לווידג'ט
-    
-    // הוספה לאותה עמודה
-    const column = widget.closest('.column-wrapper');
-    if (column) {
-        const columnId = column.dataset.columnId;
-        addWidgetToColumn(newWidgetData, columnId);
-        
-        // רענון התצוגה
-        renderContent();
-    }
-}
+
 
 function deleteWidget(widget) {
     const widgetId = widget.dataset.widgetId;
@@ -1197,6 +1190,73 @@ function updatePaddingValues() {
     // ...
 }
 
+/**
+ * פונקציה לשכפול ווידג'ט כולל כל ההגדרות שלו
+ * @param {string} widgetId המזהה של הווידג'ט לשכפול
+ */
+function duplicateWidget(widgetId) {
+    console.log('Duplicating widget:', widgetId);
+    
+    // מצא את הווידג'ט בתוך מבנה העמוד
+    let widgetData = null;
+    let parentColumn = null;
+    let widgetIndex = -1;
+    
+    // חיפוש הווידג'ט והעמודה המכילה אותו
+    for (const row of pageState) {
+        for (const column of row.columns) {
+            const index = column.widgets.findIndex(w => w.id === widgetId);
+            if (index !== -1) {
+                widgetData = column.widgets[index];
+                parentColumn = column;
+                widgetIndex = index;
+                break;
+            }
+        }
+        if (widgetData) break;
+    }
+    
+    if (!widgetData) {
+        console.error(`Widget with ID ${widgetId} not found for duplication`);
+        return;
+    }
+    
+    // יצירת העתק עמוק של הווידג'ט (כולל כל ההגדרות)
+    const clonedWidget = JSON.parse(JSON.stringify(widgetData));
+    
+    // הגדרת מזהה חדש לווידג'ט המשוכפל
+    const oldId = clonedWidget.id;
+    clonedWidget.id = generateId('w'); // שימוש בפונקציה שמייצרת מזהים ייחודיים
+    
+    console.log(`Created cloned widget with new ID: ${clonedWidget.id} (original: ${oldId})`);
+    
+    // הוספת הווידג'ט המשוכפל אחרי הווידג'ט המקורי
+    parentColumn.widgets.splice(widgetIndex + 1, 0, clonedWidget);
+    
+    // רינדור מחדש של הדף
+    Render.renderPageContent(pageState, pageContentContainer);    
+    // איתחול מחדש של SortableJS אחרי שינוי במבנה ה-DOM
+    initSortables();
+    reinitializeWidgetToolbars();
+    // שמירת מצב העמוד המעודכן
+    savePageState();
+    
+    
+    // בחירת הווידג'ט החדש בפאנל ההגדרות
+    window.dispatchEvent(new CustomEvent('select-element', { 
+        detail: { type: 'widget', id: clonedWidget.id } 
+    }));
+    
+    console.log(`Widget duplication completed for: ${widgetId}`);
+    
+}
+
+// עדכון הפונקציה שמטפלת באירוע 'duplicate-widget' אם כבר קיימת
+window.addEventListener('duplicate-widget', (event) => {
+    const widgetId = event.detail.id;
+    duplicateWidget(widgetId);
+});
+
 // הוספת קריאה לפונקציה initializeIconGroups בעת אתחול הווידג'טים או בעת יצירת פקדי הגדרות
 // למשל בתוך setupEventListeners או בפונקציה דומה:
 
@@ -1276,6 +1336,47 @@ function deleteColumnFromState(columnId) {
     }
     console.warn(`Column ${columnId} not found in state for deletion.`);
     return false; // Indicate failure
+}
+
+function reinitializeWidgetToolbars() {
+    console.log('Reinitializing widget toolbars...');
+    
+    // מוצא את כל הווידג'טים בדף
+    const allWidgets = document.querySelectorAll('.widget-wrapper[data-widget-id]');
+    
+    allWidgets.forEach(widgetWrapper => {
+        const widgetId = widgetWrapper.dataset.widgetId;
+        if (!widgetId) return;
+        
+        // מוצא את הנתונים של הווידג'ט
+        const widgetData = findWidgetById(widgetId, pageState);
+        if (!widgetData) {
+            console.warn(`Cannot find data for widget: ${widgetId}`);
+            return;
+        }
+        
+        // מוודא שיש לווידג'ט סרגל כלים ושהוא מקושר נכון
+        const toolbar = widgetWrapper.querySelector('.widget-toolbar');
+        
+        // אם אין סרגל כלים או שהוא לא מקושר נכון, מוסיף אחד חדש
+        if (!toolbar || toolbar.id !== `toolbar-${widgetId}`) {
+            // מוחק סרגל קיים במידה ויש
+            if (toolbar) toolbar.remove();
+            
+            // קורא לפונקציה שמוסיפה סרגל כלים תקין
+            Render.addWidgetControls(widgetWrapper, widgetData);
+        }
+    });
+}
+
+function findWidgetById(widgetId, state) {
+    for (const row of state) {
+        for (const column of row.columns) {
+            const widget = column.widgets.find(w => w.id === widgetId);
+            if (widget) return widget;
+        }
+    }
+    return null;
 }
 
 // הוספה: פונקציה להזזת עמודה במערך ב-state
