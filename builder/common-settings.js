@@ -157,18 +157,30 @@ export function createButtonGroup(buttons, selectedValue, changeCallback) {
 
 /**
  * יוצר קבוצת שדות קלט מקושרים (כמו פדינג/מרג'ין) עם חיווי רספונסיבי.
- * @param {array} labels - מערך של מצבים עבור הקלטים.
- * @param {object} initialValues - אובייקט עם ערכים ההתחלתיים של הקלטים.
- * @param {string} unit - יחידת המידה של הקלטים.
- * @param {boolean} linkable - האם יש לקשר את הקלטים בין עצמם.
- * @param {function} changeCallback - פונקציה שתקרא בכל שינוי, מקבלת את הערכים המעודכנים ואת ההקשר המקומי.
- * @param {boolean} isResponsive - האם יש להציג אייקונים רספונסיביים.
- * @param {object} overrideStatus - אובייקט עם מצב הנראות לאייקונים רספונסיביים.
- * @param {function} [fetchValueCallback=null] - קולבק לקבלת הערך האפקטיבי לברייקפוינט נתון.
- * @param {string[]} [settingPath=[]] - נתיב ההגדרה (נחוץ עבור fetchValueCallback).
+ * @param {string} labelText - הטקסט של התווית.
+ * @param {object} elementData - אובייקט נתוני האלמנט.
+ * @param {string[]} baseSettingPath - נתיב הגדרה בסיסי (לדוגמה ['styles', 'padding']).
+ * @param {string[]} unitOptions - מערך של אפשרויות יחידה ('px', '%', 'em', וכו').
+ * @param {string} defaultUnit - יחידת ברירת מחדל.
+ * @param {function} updateCallback - פונקציה שתקרא כאשר יש עדכון.
  * @returns {HTMLElement} - אלמנט ה-DOM של קבוצת הקלטים.
  */
-export function createLinkedInputs(labelText, elementData, baseSettingPath, unitOptions = ['px', '%', 'em', 'rem', 'vh', 'vw'], defaultUnit = 'px', updateCallback) {
+export function createLinkedInputs(labelText, elementData, baseSettingPath, unitOptions, defaultUnit, updateCallback) {
+    // Validate parameters
+    if (!Array.isArray(unitOptions)) {
+        console.error('createLinkedInputs: unitOptions must be an array', unitOptions);
+        unitOptions = ['px']; // Set a default value to prevent errors
+    }
+    
+    if (!elementData || !Array.isArray(baseSettingPath)) {
+        console.error('createLinkedInputs: Missing required parameters', { elementData, baseSettingPath });
+        // Create a simple error element instead of the control
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'text-red-500 text-sm';
+        errorDiv.textContent = 'Error: Missing required parameters for linked inputs';
+        return errorDiv;
+    }
+    
     const container = document.createElement('div');
     container.className = 'mb-4'; // Add some bottom margin
 
@@ -188,9 +200,7 @@ export function createLinkedInputs(labelText, elementData, baseSettingPath, unit
         if (unit === defaultUnit) option.selected = true;
         unitSelector.appendChild(option);
     });
-    unitSelector.addEventListener('change', () => {
-        updateInputValuesAndState(true);
-    });
+    
     unitSelectorWrapper.appendChild(unitSelector);
     const arrowIcon = document.createElement('i'); // Custom arrow
     arrowIcon.className = 'ri-arrow-down-s-line text-xs text-gray-400 absolute right-1 top-1/2 transform -translate-y-1/2 pointer-events-none';
@@ -271,12 +281,24 @@ export function createLinkedInputs(labelText, elementData, baseSettingPath, unit
              if (linkButton.dataset.linked === 'true') {
                  console.log('Linked state: updating all sides');
                  inputElements.forEach(input => { if (input !== inputElement) input.value = finalValue; });
+                 
+                 // Save changes to all sides
                  ['top', 'right', 'bottom', 'left'].forEach(s => {
                      saveResponsiveSetting(elementData, [...baseSettingPath, s], fullValue, currentBreakpoint, updateCallback);
                  });
+                 
+                 // After saving, call updateCallback to apply changes immediately
+                 if (typeof updateCallback === 'function') {
+                     updateCallback();
+                 }
              } else {
                  console.log(`Unlinked state: updating only ${side}`);
                  saveResponsiveSetting(elementData, sidePath, fullValue, currentBreakpoint, updateCallback);
+                 
+                 // After saving, call updateCallback to apply changes immediately
+                 if (typeof updateCallback === 'function') {
+                     updateCallback();
+                 }
              }
         });
 
@@ -302,8 +324,6 @@ export function createLinkedInputs(labelText, elementData, baseSettingPath, unit
             initialValues.push(effectiveValue);
             if (i > 0 && effectiveValue !== initialValues[0]) {
                 allSame = false;
-                // אין צורך להמשיך לבדוק אם מצאנו חוסר אחידות
-                // break; // אפשר לצאת מהלולאה כאן, אבל נמשיך כדי לקבל את כל הערכים אם נרצה בעתיד
             }
         }
         console.log(`Initial values for ${baseSettingPath.join('.')} at ${currentBreakpoint}:`, initialValues, `All same? ${allSame}`);
@@ -338,8 +358,6 @@ export function createLinkedInputs(labelText, elementData, baseSettingPath, unit
             const sidePath = [...baseSettingPath, side];
             let currentValueRaw = getNestedValue(elementData.config, ['responsiveOverrides', currentBreakpoint, ...sidePath]);
             let desktopValueRaw = getNestedValue(elementData.config, ['responsiveOverrides', 'desktop', ...sidePath]) ?? getNestedValue(elementData.config, sidePath);
-
-            // console.log(` -> Side: ${side}, Current BP Raw: ${currentValueRaw}, Desktop/Base Raw: ${desktopValueRaw}`);
 
             let valueToDisplay = '';
             let placeholderToDisplay = '';
@@ -423,12 +441,21 @@ export function createLinkedInputs(labelText, elementData, baseSettingPath, unit
              ['top', 'right', 'bottom', 'left'].forEach(s => {
                  saveResponsiveSetting(elementData, [...baseSettingPath, s], valueToSave, currentBreakpoint, updateCallback);
              });
+             
+             // After saving, immediately apply changes
+             if (typeof updateCallback === 'function') {
+                 updateCallback();
+             }
         }
-        // ------------------------------------------------------
 
         // עדכון סופי של מראה הכפתור לפי המצב העדכני שלו
         updateLinkVisual(); 
     };
+
+    // Add event listener for unit selector change
+    unitSelector.addEventListener('change', () => {
+        updateInputValuesAndState(true); // Force save with new unit
+    });
 
     // --- שינוי: קריאה ראשונית אחרי קביעת מצב הנעילה --- 
     updateLinkVisual(); // עדכן מראה לפי המצב שנקבע

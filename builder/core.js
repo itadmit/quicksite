@@ -387,109 +387,150 @@ function loadSettingsTabContent(tabName) {
     activeTabPanel.innerHTML = ''; // Clear previous content
 
     // Define the update callback function used by settings controls
-    const updateCallback = (updatedElementData) => {
-        console.log('[UpdateCallback] Received updatedElementData:', JSON.stringify(updatedElementData));
+    // In core.js, find the updateCallback function defined in loadSettingsTabContent
 
-        // הערה: saveResponsiveSetting כבר עדכן את ה-elementData המקורי
-        // שמוחזק ב-pageState, אז אנחנו לא צריכים לקרוא לו שוב כאן.
+// Define the update callback function used by settings controls
+const updateCallback = (updatedElementData) => {
+    console.log('[UpdateCallback] Received updatedElementData:', JSON.stringify(updatedElementData));
 
-        let stylesNeedReapply = false;
-        let targetElementId = selectedElement ? selectedElement.id : null;
-        let changedColumnData = null;
+    // Using the elementData that updateCallback was called with
+    // or falling back to the selected element if no specific data provided
+    const elementDataForCallback = updatedElementData || 
+        (selectedElement ? findElementData(pageState, selectedElement.id) : null);
+    
+    if (!elementDataForCallback) {
+        console.warn('[UpdateCallback] Could not get element data.');
+        return; 
+    }
 
-        // --- שינוי: שימוש ב-updatedElementData אם קיים, אחרת חפש ---
-        const elementDataForCallback = updatedElementData || (targetElementId ? findElementData(pageState, targetElementId) : null);
-        if (!elementDataForCallback) {
-            console.warn('[UpdateCallback] Could not get element data.');
-            return; 
+    let stylesNeedReapply = false;
+    let targetElementId = selectedElement ? selectedElement.id : null;
+    let changedColumnData = null;
+
+    // Update text content (if applicable)
+    if (elementDataForCallback.type === 'text') {
+        const widgetElement = document.querySelector(`[data-widget-id="${elementDataForCallback.id}"]`);
+        if (widgetElement) {
+            const effectiveConfig = getEffectiveConfig(elementDataForCallback, getCurrentBreakpoint());
+            const contentElement = widgetElement.querySelector('.widget-content');
+            if (contentElement) {
+                contentElement.textContent = effectiveConfig.content || '';
+                stylesNeedReapply = true;
+            }
+        }
+    }
+
+    // Handle column width changes
+    if (elementDataForCallback.widgets !== undefined && // Is a column
+        updatedElementData && 
+        updatedElementData.config && 
+        'widthPercent' in updatedElementData.config) {
+        
+        // Find parent row
+        const columnData = elementDataForCallback;
+        const rowData = findParentRow(pageState, columnData.id);
+        if (!rowData) {
+            console.warn('[UpdateCallback] Could not find parent row for column:', columnData.id);
+            return;
         }
 
-        // --- הוספה: עדכון התוכן של הווידג'ט ---
-        if (elementDataForCallback.type === 'text') {
-            const widgetElement = document.querySelector(`[data-widget-id="${elementDataForCallback.id}"]`);
-            if (widgetElement) {
-                const effectiveConfig = getEffectiveConfig(elementDataForCallback, getCurrentBreakpoint());
-                const contentElement = widgetElement.querySelector('.widget-content');
+        // Calculate total width of other columns
+        const otherColumns = rowData.columns.filter(col => col.id !== columnData.id);
+        const totalWidthOfOthersBeforeChange = otherColumns.reduce((sum, col) => {
+            const effectiveConfig = getEffectiveConfig(col, getCurrentBreakpoint());
+            return sum + parseFloat(effectiveConfig.widthPercent || (100 / rowData.columns.length));
+        }, 0);
+
+        // Calculate remaining width
+        const newWidth = parseFloat(columnData.config.widthPercent);
+        const remainingWidth = 100 - newWidth;
+
+        // Distribute remaining width among other columns
+        let distributedWidthSum = 0;
+        const minAllowedWidth = 10; // Minimum 10%
+        const maxAllowedWidth = 100; // Maximum 100%
+
+        otherColumns.forEach((col) => {
+            const effectiveSiblingConfig = getEffectiveConfig(col, getCurrentBreakpoint());
+            const originalOtherWidth = parseFloat(effectiveSiblingConfig.widthPercent || (100 / rowData.columns.length));
+            let newOtherWidth = (totalWidthOfOthersBeforeChange > 0)
+                                ? (originalOtherWidth / totalWidthOfOthersBeforeChange) * remainingWidth
+                                : (100 / otherColumns.length);
+
+            newOtherWidth = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, newOtherWidth));
+            
+            if (!col.config) col.config = {};
+            col.config.widthPercent = newOtherWidth.toFixed(2);
+            console.log(` -> Updated width for sibling column ${col.id}: ${newOtherWidth.toFixed(2)}%`);
+            
+            stylesNeedReapply = true;
+        });
+    }
+
+    // Apply styles to the modified element and its container
+    if (stylesNeedReapply || updatedElementData) {
+        console.log('Update Callback: Re-applying styles to element:', elementDataForCallback.id);
+        
+        // Try to find the element by ID
+        let element;
+        const elementId = elementDataForCallback.id;
+        
+        if (elementDataForCallback.type === 'text' || elementDataForCallback.type) {
+            // Widget
+            element = document.querySelector(`[data-widget-id="${elementId}"]`);
+        } else if (elementDataForCallback.widgets !== undefined) {
+            // Column
+            element = document.querySelector(`[data-column-id="${elementId}"]`);
+        } else if (elementDataForCallback.columns) {
+            // Row
+            element = document.querySelector(`[data-row-id="${elementId}"]`);
+        }
+        
+        if (element) {
+            const effectiveConfig = getEffectiveConfig(elementDataForCallback, getCurrentBreakpoint());
+            
+            // Option 1: Direct call to applyStylesToElement
+            Render.applyStylesToElement(element, elementDataForCallback);
+            
+            // If modifying a column, re-render the entire row to ensure proper layout
+            if (elementDataForCallback.widgets !== undefined) { // is a column
+                const rowElement = element.closest('.row-wrapper');
+                if (rowElement) {
+                    const rowId = rowElement.dataset.rowId;
+                    const rowData = findElementData(pageState, rowId);
+                    if (rowData) {
+                        // Force a complete re-render of the row
+                        rowElement.innerHTML = '';
+                        const effectiveRowConfig = getEffectiveConfig(rowData, getCurrentBreakpoint());
+                        const newRowElement = Render.renderRow(rowData, effectiveRowConfig);
+                        rowElement.parentNode.replaceChild(newRowElement, rowElement);
+                        
+                        // Re-initialize sortables after DOM change
+                        initSortables();
+                    }
+                }
+            } else if (elementDataForCallback.type === 'text') {
+                // For text widgets, ensure content is updated
+                const contentElement = element.querySelector('.widget-content');
                 if (contentElement) {
+                    const effectiveConfig = getEffectiveConfig(elementDataForCallback, getCurrentBreakpoint());
                     contentElement.textContent = effectiveConfig.content || '';
+                    contentElement.style.color = effectiveConfig.styles?.color || '';
                 }
             }
-        }
-        // -----------------------------------------
-
-        // --- שינוי: בדיקה אם זה עמודה ושהשינוי הוא ברוחב ---
-        if (elementDataForCallback.type === 'column' && 
-            updatedElementData && 
-            updatedElementData.config && 
-            'widthPercent' in updatedElementData.config) {
+        } else {
+            console.warn(`[UpdateCallback] Element not found in DOM: ${elementDataForCallback.id}`);
             
-            // מצא את העמודה האחות
-            const columnData = elementDataForCallback;
-            const rowData = findParentRow(pageState, columnData.id);
-            if (!rowData) {
-                console.warn('[UpdateCallback] Could not find parent row for column:', columnData.id);
-                return;
-            }
-
-            // חשב את הרוחב הכולל של העמודות האחרות
-            const otherColumns = rowData.columns.filter(col => col.id !== columnData.id);
-            const totalWidthOfOthersBeforeChange = otherColumns.reduce((sum, col) => {
-                const effectiveConfig = getEffectiveConfig(col, getCurrentBreakpoint());
-                return sum + parseFloat(effectiveConfig.widthPercent || (100 / rowData.columns.length));
-            }, 0);
-
-            // חשב את הרוחב הנותר
-            const newWidth = parseFloat(columnData.config.widthPercent);
-            const remainingWidth = 100 - newWidth;
-
-            // חלוקת הרוחב הנותר בין העמודות האחרות
-            let distributedWidthSum = 0;
-            const minAllowedWidth = 10; // מינימום 10%
-            const maxAllowedWidth = 100; // מקסימום 100%
-
-            otherColumns.forEach((col) => {
-                const effectiveSiblingConfig = getEffectiveConfig(col, getCurrentBreakpoint());
-                const originalOtherWidth = parseFloat(effectiveSiblingConfig.widthPercent || (100 / rowData.columns.length));
-                let newOtherWidth = (totalWidthOfOthersBeforeChange > 0)
-                                    ? (originalOtherWidth / totalWidthOfOthersBeforeChange) * remainingWidth
-                                    : (100 / otherColumns.length);
-
-                newOtherWidth = Math.max(minAllowedWidth, Math.min(maxAllowedWidth, newOtherWidth));
-                
-                // *** תיקון נדרש כאן: השמירה צריכה להיות רספונסיבית גם לשכנות ***
-                // צריך לקרוא ל-saveResponsiveSetting עבור כל עמודה אחות!
-                // שמירה ישירה לבסיס תדרוס overrides.
-                console.log(` -> Calculated new width for sibling ${col.id}: ${newOtherWidth.toFixed(2)}%`);
-                // שינוי זמני: נשמור לבסיס רק כדי לראות אם העדכון עובד
-                if (!col.config) col.config = {};
-                col.config.widthPercent = newOtherWidth.toFixed(2);
-                 console.log(`    (Temporarily saving to base config)`);
-                // --------------------------------------------------
-                
-                distributedWidthSum += newOtherWidth;
-                stylesNeedReapply = true;
-            });
-
-            const finalAdjustment = remainingWidth - distributedWidthSum;
-            if (Math.abs(finalAdjustment) > 0.01) {
-                console.warn(`Width distribution has a small discrepancy: ${finalAdjustment.toFixed(2)}%`);
-                // אפשר להוסיף כאן לוגיקה לתיקון הפער אם צריך
-            }
+            // If element not found, consider re-rendering the entire page
+            console.log('Re-rendering full page content as element was not found');
+            Render.renderPageContent(pageState, pageContentContainer);
+            initSortables();
         }
+    }
 
-        // --- שינוי: בדיקה אם צריך לעדכן סגנונות ---
-        if (stylesNeedReapply || updatedElementData) {
-            console.log('Update Callback: Re-applying styles to element:', elementDataForCallback.id);
-            const element = document.querySelector(`[data-widget-id="${elementDataForCallback.id}"]`);
-            if (element) {
-                const effectiveConfig = getEffectiveConfig(elementDataForCallback, getCurrentBreakpoint());
-                Render.applyStylesToElement(element, effectiveConfig);
-            }
-        }
-
-        // שמירת המצב המעודכן
-        savePageState();
-    };
+    // Save the updated state
+    savePageState();
+}
 
     // Populate the active tab based on element type
     const elementType = selectedElement.type;

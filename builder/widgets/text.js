@@ -1,7 +1,7 @@
 // Text Widget Module
 
 // --- הוספה: ייבוא פונקציות רספונסיביות ושמירה ---
-import { saveResponsiveSetting } from '../render-responsive.js';
+
 // --- שינוי: ייבוא פקדים נוספים ---
 import {
     createTextInput,
@@ -12,6 +12,9 @@ import {
     createVisibilityControls, // <<< הוספה (בהנחה שקיים)
     createLinkedInputs // <<< החלפה
 } from '../common-settings.js';
+
+import { saveResponsiveSetting, getSettingOverrideStatus, getEffectiveConfig, getNestedValue, getCurrentBreakpoint } from '../render-responsive.js';
+
 // ---------------------------------------------------
 
 console.log('Text Widget module loaded');
@@ -170,74 +173,160 @@ function _populateDesignTab(panel, elementData, effectiveConfig, updateCallback)
  * @param {object} effectiveConfig
  * @param {function} updateCallback
  */
+// In text.js, update the _populateAdvancedTab function to fix the CSS ID and Classes section:
+
 function _populateAdvancedTab(panel, elementData, effectiveConfig, updateCallback) {
-     panel.innerHTML = ''; // Clear
-     const config = effectiveConfig;
-     const styles = config.styles || {};
-     const visibility = config.visibility || { desktop: true, tablet: true, mobile: true };
+    panel.innerHTML = ''; // Clear
+    const config = effectiveConfig;
+    const styles = config.styles || {};
+    const visibility = config.visibility || { desktop: true, tablet: true, mobile: true };
 
-    // Labels for spacing inputs
-    const spacingLabels = [
-        { label: 'למעלה', key: 'top' },
-        { label: 'ימין', key: 'right' },
-        { label: 'למטה', key: 'bottom' },
-        { label: 'שמאל', key: 'left' },
-    ];
+   // --- Margin --- (Responsive)
+   const { accordionItem: marginAccordion, contentDiv: marginContent } = createSettingsGroup('Margin (שוליים חיצוניים)');
+   const currentMargin = styles.margin || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
+   
+   marginContent.appendChild(
+       createLinkedInputs(
+           'שוליים', // labelText
+           elementData, // elementData
+           ['styles', 'margin'], // baseSettingPath
+           ['px', '%', 'em', 'rem'], // unitOptions as array
+           currentMargin.unit || 'px', // defaultUnit
+           updateCallback // updateCallback
+       )
+   );
+   panel.appendChild(marginAccordion);
 
-    // --- Margin --- (Responsive)
-    const { accordionItem: marginAccordion, contentDiv: marginContent } = createSettingsGroup('Margin (שוליים חיצוניים)');
-    const currentMargin = styles.margin || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
-    marginContent.appendChild(
-        createLinkedInputs(spacingLabels, currentMargin, currentMargin.unit || 'px', true, () => {
-             saveResponsiveSetting(elementData, ['styles', 'margin'], currentMargin, updateCallback);
-        })
-    );
-    panel.appendChild(marginAccordion);
+   // --- Padding --- (Responsive)
+   const { accordionItem: paddingAccordion, contentDiv: paddingContent } = createSettingsGroup('Padding (ריפוד פנימי)');
+   const currentPadding = styles.padding || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
+   
+   paddingContent.appendChild(
+       createLinkedInputs(
+           'ריפוד', // labelText
+           elementData, // elementData
+           ['styles', 'padding'], // baseSettingPath
+           ['px', '%', 'em', 'rem'], // unitOptions as array
+           currentPadding.unit || 'px', // defaultUnit
+           updateCallback // updateCallback
+       )
+   );
+   panel.appendChild(paddingAccordion);
 
-    // --- Padding --- (Responsive)
-    const { accordionItem: paddingAccordion, contentDiv: paddingContent } = createSettingsGroup('Padding (ריפוד פנימי)');
-    const currentPadding = styles.padding || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
-    paddingContent.appendChild(
-        createLinkedInputs(spacingLabels, currentPadding, currentPadding.unit || 'px', true, () => {
-            saveResponsiveSetting(elementData, ['styles', 'padding'], currentPadding, updateCallback);
-        })
-    );
-    panel.appendChild(paddingAccordion);
+   // --- Visibility Section --- (Responsive)
+   const { accordionItem: visibilityAccordion, contentDiv: visibilityContent } = createSettingsGroup('נראות (Visibility)');
+   const currentVisibility = config.visibility || { desktop: true, tablet: true, mobile: true };
+   visibilityContent.appendChild(
+       createVisibilityControls(currentVisibility, (newVisibility) => {
+           const currentBreakpoint = getCurrentBreakpoint();
+           saveResponsiveSetting(elementData, ['visibility', currentBreakpoint], newVisibility[currentBreakpoint], currentBreakpoint, updateCallback);
+       })
+   );
+   panel.appendChild(visibilityAccordion);
 
-    // --- Visibility Section --- (Responsive)
-    const { accordionItem: visibilityAccordion, contentDiv: visibilityContent } = createSettingsGroup('נראות (Visibility)');
-    const currentVisibility = config.visibility || { desktop: true, tablet: true, mobile: true };
-    visibilityContent.appendChild(
-        createVisibilityControls(currentVisibility, (newVisibility) => {
-            const currentBreakpoint = window.currentBreakpoint || 'desktop';
-            saveResponsiveSetting(elementData, ['visibility', currentBreakpoint], newVisibility[currentBreakpoint], updateCallback);
-        })
-    );
-    panel.appendChild(visibilityAccordion);
+   // --- Custom Identifiers Section (Not responsive) ---
+   const { accordionItem: idClassAccordion, contentDiv: idClassContent } = createSettingsGroup('מזהים וקלאסים');
+   
+   // --- FIX: CSS ID Input ---
+   const idLabel = document.createElement('label');
+   idLabel.textContent = 'CSS ID';
+   idLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
+   
+   // Create a manual input container instead of using createTextInput
+   const idInputContainer = document.createElement('div');
+   idInputContainer.className = 'mb-3';
+   
+   const idInput = document.createElement('input');
+   idInput.type = 'text';
+   idInput.className = 'w-full h-9 px-3 text-sm rounded-lg focus:outline-none bg-gray-50 text-gray-700';
+   idInput.placeholder = 'my-unique-id';
+   idInput.value = config.cssId || '';
+   
+   // Add input event listener
+   idInput.addEventListener('input', (e) => {
+       // Sanitize ID value (only allow letters, numbers, hyphens, underscores)
+       const validValue = e.target.value.replace(/[^a-zA-Z0-9_-]/g, '');
+       e.target.value = validValue;
+       
+       // Save to element data
+       elementData.config.cssId = validValue;
+       
+       // Apply ID directly to element to see immediate change
+       const widgetElement = document.querySelector(`[data-widget-id="${elementData.id}"]`);
+       if (widgetElement) {
+           if (validValue) {
+               widgetElement.id = validValue;
+           } else {
+               widgetElement.removeAttribute('id');
+           }
+       }
+       
+       // Call update callback to save state
+       if (typeof updateCallback === 'function') {
+           updateCallback();
+       }
+   });
+   
+   idInputContainer.appendChild(idLabel);
+   idInputContainer.appendChild(idInput);
+   idClassContent.appendChild(idInputContainer);
 
-    // --- Custom Identifiers Section (Not responsive) ---
-    const { accordionItem: idClassAccordion, contentDiv: idClassContent } = createSettingsGroup('מזהים וקלאסים');
-    const idLabel = document.createElement('label');
-    idLabel.textContent = 'CSS ID';
-    idLabel.className = 'block text-sm font-medium text-gray-700 mb-1';
-    const idInput = createTextInput(elementData.config.cssId || '', (value) => {
-        elementData.config.cssId = value;
-        updateCallback(false);
-    });
-    idClassContent.appendChild(idLabel);
-    idClassContent.appendChild(idInput);
+   // --- FIX: CSS Classes Input ---
+   const classLabel = document.createElement('label');
+   classLabel.textContent = 'CSS Classes';
+   classLabel.className = 'block text-sm font-medium text-gray-700 mt-3 mb-1';
+   
+   // Create a manual input container
+   const classInputContainer = document.createElement('div');
+   classInputContainer.className = 'mb-3';
+   
+   const classInput = document.createElement('input');
+   classInput.type = 'text';
+   classInput.className = 'w-full h-9 px-3 text-sm rounded-lg focus:outline-none bg-gray-50 text-gray-700';
+   classInput.placeholder = 'class1 class2 class3';
+   classInput.value = config.cssClasses || '';
+   
+   // Track previous classes to remove them when changing
+   let previousClasses = config.cssClasses ? config.cssClasses.split(' ').filter(c => c.trim()) : [];
+   
+   // Add input event listener
+   classInput.addEventListener('input', (e) => {
+       // Sanitize class value (only allow letters, numbers, hyphens, underscores, spaces)
+       const validValue = e.target.value.replace(/[^a-zA-Z0-9_\-\s]/g, '');
+       e.target.value = validValue;
+       
+       // Save to element data
+       elementData.config.cssClasses = validValue;
+       
+       // Apply classes directly to element to see immediate change
+       const widgetElement = document.querySelector(`[data-widget-id="${elementData.id}"]`);
+       if (widgetElement) {
+           // Remove previous classes
+           if (previousClasses.length > 0) {
+               widgetElement.classList.remove(...previousClasses);
+           }
+           
+           // Add new classes
+           const newClasses = validValue.split(' ').filter(c => c.trim());
+           if (newClasses.length > 0) {
+               widgetElement.classList.add(...newClasses);
+               previousClasses = newClasses;
+           } else {
+               previousClasses = [];
+           }
+       }
+       
+       // Call update callback to save state
+       if (typeof updateCallback === 'function') {
+           updateCallback();
+       }
+   });
+   
+   classInputContainer.appendChild(classLabel);
+   classInputContainer.appendChild(classInput);
+   idClassContent.appendChild(classInputContainer);
 
-    const classLabel = document.createElement('label');
-    classLabel.textContent = 'CSS Classes';
-    classLabel.className = 'block text-sm font-medium text-gray-700 mt-3 mb-1';
-    const classInput = createTextInput(elementData.config.cssClasses || '', (value) => {
-        elementData.config.cssClasses = value;
-        updateCallback(false);
-    });
-    idClassContent.appendChild(classLabel);
-    idClassContent.appendChild(classInput);
-
-    panel.appendChild(idClassAccordion);
+   panel.appendChild(idClassAccordion);
 }
 
 /**
@@ -330,7 +419,17 @@ export function render(widgetData, effectiveConfig) {
  * @param {HTMLElement} widgetWrapper אלמנט ה-wrapper של הווידג'ט
  * @param {object} effectiveConfig הקונפיג האפקטיבי
  */
+/**
+ * מחיל סגנונות inline על ה-wrapper של הווידג'ט.
+ * @param {HTMLElement} widgetWrapper אלמנט ה-wrapper של הווידג'ט
+ * @param {object} effectiveConfig הקונפיג האפקטיבי
+ */
 export function applyStyles(widgetWrapper, effectiveConfig) {
+    if (!widgetWrapper || !effectiveConfig) {
+        console.warn('applyStyles: Missing widgetWrapper or effectiveConfig in text.js');
+        return;
+    }
+
     const styles = effectiveConfig.styles || {};
     const typo = styles.typography || {};
     const margin = styles.margin || { top: '0', right: '0', bottom: '0', left: '0', unit: 'px' };
@@ -342,36 +441,72 @@ export function applyStyles(widgetWrapper, effectiveConfig) {
         widgetWrapper.className = widgetContent.dataset.widgetClasses;
     }
 
+    // Always ensure widget-wrapper class is present
+    if (!widgetWrapper.classList.contains('widget-wrapper')) {
+        widgetWrapper.classList.add('widget-wrapper');
+    }
+
+    // Apply text content from config
+    if (widgetContent && effectiveConfig.content !== undefined) {
+        widgetContent.textContent = effectiveConfig.content;
+    }
+
     // החלת סגנונות inline עיקריים שלא דרך קלאסים
-    widgetWrapper.style.color = styles.color || null;
+    widgetWrapper.style.color = styles.color || '';
 
-    // הוספה: החלת מרווחים
+    // Improved margin handling - make sure to append proper units
     const marginUnit = margin.unit || 'px';
-    const paddingUnit = padding.unit || 'px';
-    widgetWrapper.style.marginTop = margin.top ? `${margin.top}${marginUnit}` : null;
-    widgetWrapper.style.marginRight = margin.right ? `${margin.right}${marginUnit}` : null;
-    widgetWrapper.style.marginBottom = margin.bottom ? `${margin.bottom}${marginUnit}` : null;
-    widgetWrapper.style.marginLeft = margin.left ? `${margin.left}${marginUnit}` : null;
+    widgetWrapper.style.marginTop = margin.top ? `${margin.top}${marginUnit}` : '0';
+    widgetWrapper.style.marginRight = margin.right ? `${margin.right}${marginUnit}` : '0';
+    widgetWrapper.style.marginBottom = margin.bottom ? `${margin.bottom}${marginUnit}` : '0';
+    widgetWrapper.style.marginLeft = margin.left ? `${margin.left}${marginUnit}` : '0';
 
-    widgetWrapper.style.paddingTop = padding.top ? `${padding.top}${paddingUnit}` : null;
-    widgetWrapper.style.paddingRight = padding.right ? `${padding.right}${paddingUnit}` : null;
-    widgetWrapper.style.paddingBottom = padding.bottom ? `${padding.bottom}${paddingUnit}` : null;
-    widgetWrapper.style.paddingLeft = padding.left ? `${padding.left}${paddingUnit}` : null;
+    // Improved padding handling - make sure to append proper units
+    const paddingUnit = padding.unit || 'px';
+    widgetWrapper.style.paddingTop = padding.top ? `${padding.top}${paddingUnit}` : '0';
+    widgetWrapper.style.paddingRight = padding.right ? `${padding.right}${paddingUnit}` : '0';
+    widgetWrapper.style.paddingBottom = padding.bottom ? `${padding.bottom}${paddingUnit}` : '0';
+    widgetWrapper.style.paddingLeft = padding.left ? `${padding.left}${paddingUnit}` : '0';
+
+    // Background color if specified
+    if (styles.backgroundColor) {
+        widgetWrapper.style.backgroundColor = styles.backgroundColor;
+    }
 
     // החלת נראות (visibility)
+    const currentBreakpoint = getCurrentBreakpoint(); // Now this will work with the import
     const visibility = effectiveConfig.visibility || { desktop: true, tablet: true, mobile: true };
-    const currentBreakpoint = window.currentBreakpoint || 'desktop';
-    if (visibility[currentBreakpoint]) {
-        widgetWrapper.style.display = '';
-    } else {
+    
+    if (visibility[currentBreakpoint] === false) {
         widgetWrapper.style.display = 'none';
+    } else {
+        widgetWrapper.style.display = '';
     }
     
-    // עדכון הסגנונות של האלמנט עצמו
+    // Add visibility classes - alternative approach
+    widgetWrapper.classList.remove('hidden-desktop', 'hidden-tablet', 'hidden-mobile');
+    if (visibility.desktop === false) widgetWrapper.classList.add('hidden-desktop');
+    if (visibility.tablet === false) widgetWrapper.classList.add('hidden-tablet');
+    if (visibility.mobile === false) widgetWrapper.classList.add('hidden-mobile');
+    
+    // עדכון הסגנונות של האלמנט עצמו (widget-content)
     if (widgetContent) {
-        widgetContent.style.color = styles.color || null;
+        widgetContent.style.color = styles.color || '';
+        
+        // Apply typography settings to content element
+        if (typo.fontSize) {
+            // Remove existing font size classes first
+            widgetContent.classList.remove('text-xs', 'text-sm', 'text-base', 'text-lg', 'text-xl', 'text-2xl', 'text-3xl', 'text-4xl');
+            widgetContent.classList.add(typo.fontSize);
+        }
+        
+        if (typo.textAlign) {
+            // Remove existing alignment classes first
+            widgetContent.classList.remove('text-left', 'text-center', 'text-right', 'text-justify');
+            widgetContent.classList.add(typo.textAlign);
+        }
     }
+    
+    // Force a relayout/repaint
+    void widgetWrapper.offsetHeight; // This triggers a reflow
 }
-
-// הסרת ייצוא ישיר של populateContentTab
-// export { getWidgetName, getDefaultConfig, populateContentTab }; 

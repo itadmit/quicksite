@@ -682,12 +682,40 @@ function moveColumn(columnId, direction) {
 // ==========================================
 // NEW: Apply Styles Directly to Element
 // ==========================================
+// In render.js, find the applyStylesToElement function and update it to handle missing elements better
+
+/**
+ * Applies styles to an element based on its element data and config
+ * @param {HTMLElement} element - The DOM element to apply styles to
+ * @param {Object} elementData - The data structure for this element
+ */
 export function applyStylesToElement(element, elementData) {
-    if (!element || !elementData || !elementData.config) {
-        console.warn('applyStylesToElement: Missing element or data');
+    // Improved error handling - check for both element and elementData
+    if (!element) {
+        console.warn('applyStylesToElement: DOM element not found');
+        return;
+    }
+    
+    if (!elementData || !elementData.config) {
+        console.warn('applyStylesToElement: Missing element data or config');
         return;
     }
 
+    // Find element by ID if needed (this is what was missing!)
+    if (typeof element === 'string') {
+        const elementId = element;
+        element = document.querySelector(`[data-element-id="${elementId}"]`) || 
+                 document.querySelector(`[data-widget-id="${elementId}"]`) || 
+                 document.querySelector(`[data-column-id="${elementId}"]`) || 
+                 document.querySelector(`[data-row-id="${elementId}"]`);
+        
+        if (!element) {
+            console.warn(`applyStylesToElement: Could not find element with ID: ${elementId}`);
+            return;
+        }
+    }
+
+    // Rest of the function remains the same
     const elementType = elementData.config ? (elementData.columns ? 'row' : (elementData.widgets ? 'column' : 'widget')) : 'unknown';
     // console.log(`Applying styles to ${elementType}: ${elementData.id}`);
 
@@ -695,8 +723,6 @@ export function applyStylesToElement(element, elementData) {
     const config = getEffectiveConfig(elementData, currentBreakpoint);
     const styles = config.styles || {};
     
-    // console.log(`   [applyStyles] Breakpoint: ${currentBreakpoint}, Element: ${elementData.id}, Effective widthPercent: ${config.widthPercent}`);
-
     // --- טיפול בנראות (Visibility) ---
     element.classList.remove('hidden-desktop', 'hidden-tablet', 'hidden-mobile'); // איפוס תחילה
     if (config.visibility) {
@@ -704,12 +730,10 @@ export function applyStylesToElement(element, elementData) {
         if (config.visibility.tablet === false) element.classList.add('hidden-tablet');
         if (config.visibility.mobile === false) element.classList.add('hidden-mobile');
     }
-    // ---------------------------------
     
     // --- איפוס סגנונות inline לפני החלה מחדש (חשוב למניעת התנגשויות) ---
     element.style.cssText = ''; // דרך קלה לאפס הכל
-    // ----------------------------------------------------------------------
-
+    
     // --- החלת סגנונות כלליים (לכל סוגי האלמנטים) ---
     Object.assign(element.style, {
         backgroundColor: styles.backgroundColor || 'transparent',
@@ -725,7 +749,6 @@ export function applyStylesToElement(element, elementData) {
         borderStyle: styles.border?.style || 'none',
         borderColor: styles.border?.color || 'transparent',
         borderRadius: styles.borderRadius?.value ? `${parseInt(styles.borderRadius.value)}${styles.borderRadius.unit || 'px'}` : null,
-        // ... עוד סגנונות משותפים?
     });
 
     // Box Shadow
@@ -796,8 +819,23 @@ export function applyStylesToElement(element, elementData) {
             widgetModule.applyStyles(element, config); // העברת הקונפיג האפקטיבי
         } else {
             // אפשר להוסיף כאן סגנונות ברירת מחדל לווידג'טים אם רוצים
+            // Apply text content update for text widgets if applicable
+            if (elementData.type === 'text') {
+                const contentElement = element.querySelector('.widget-content');
+                if (contentElement && config.content !== undefined) {
+                    contentElement.textContent = config.content;
+                }
+                // Additionally apply color to both wrapper and content element for text widgets
+                if (styles.color) {
+                    element.style.color = styles.color;
+                    if (contentElement) contentElement.style.color = styles.color;
+                }
+            }
         }
     }
+    
+    // Force an update notification to the browser
+    element.style.display = element.style.display;
 }
 
 // --- פונקציית עזר שהוסרה מ-core.js אך שימושית כאן ---
